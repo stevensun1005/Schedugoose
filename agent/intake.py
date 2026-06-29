@@ -206,7 +206,18 @@ def next_question(intake: Intake, config: dict[str, Any] | None = None) -> str:
     if not intake.get("residency"):
         return "Are you an international student? (yes/no)"
     if not intake.get("sequence"):
-        return "Which co-op sequence are you on?"
+        fac = intake.get("faculty")
+        if fac == "Math":
+            return (
+                "Which sequence — Regular (no co-op), or co-op Sequence 1, 2, 3, or 4? "
+                "(Sequence 1 is the most common; they differ in when your work terms fall.)"
+            )
+        if fac == "Engineering":
+            return (
+                "Which co-op stream — Stream 4 (earlier first work term) or "
+                "Stream 8 (more time to settle in before your first co-op)?"
+            )
+        return "Are you in a co-op or regular (non-co-op) sequence?"
     if not intake.get("start_term"):
         return "Which term do you start (your 1A)? e.g. Fall 2026"
     if not intake.get("career_goal"):

@@ -79,24 +79,57 @@ def _build(key: str, name: str, faculty: str, coop: bool, pattern: list[str]) ->
     return Sequence(key, name, faculty, coop, tuple(slots))
 
 
-# Representative sequences (study=S, work=W, off=skip-summer).
+# Representative sequences (study=S, work=W, off=skip term). Math co-op sequences
+# follow UW's four entry-level streams (SEQ 1-4), which differ in when work terms
+# fall. Source: uwaterloo.ca/new-math-students/co-op/sequence-charts
 SEQUENCES: dict[str, Sequence] = {
     # --- Math / Computer Science ---
     "math-regular": _build(
-        "math-regular", "CS Regular (no co-op)", "Math", False,
+        "math-regular", "Math/CS Regular (no co-op)", "Math", False,
         ["study", "study", "off"] * 4,
     ),
+    # SEQ 1 — the most common: work terms alternate from spring of year 1.
     "math-coop": _build(
-        "math-coop", "CS Co-op", "Math", True,
+        "math-coop", "Math/CS Co-op — Sequence 1 (most common)", "Math", True,
         ["study", "study", "work",
          "study", "work", "study",
          "work", "study", "work",
          "study", "work", "study",
          "work", "study"],
     ),
-    # --- Engineering (lockstep co-op) ---
+    # SEQ 2 — 2A and 2B back-to-back, then alternating; double work term before 4B.
+    "math-coop-2": _build(
+        "math-coop-2", "Math/CS Co-op — Sequence 2", "Math", True,
+        ["study", "study", "work",
+         "study", "study", "work",
+         "study", "work", "study",
+         "work", "study", "work",
+         "work", "study"],
+    ),
+    # SEQ 3 — first year ends with an off term; first work term after 2A.
+    "math-coop-3": _build(
+        "math-coop-3", "Math/CS Co-op — Sequence 3 (study-heavy first year)", "Math", True,
+        ["study", "study", "off",
+         "study", "work", "study",
+         "work", "study", "work",
+         "study", "work", "study",
+         "work", "work", "study"],
+    ),
+    # SEQ 4 — study through 1A/1B/2A before the first work term.
+    "math-coop-4": _build(
+        "math-coop-4", "Math/CS Co-op — Sequence 4 (latest first work term)", "Math", True,
+        ["study", "study", "study",
+         "work", "study", "work",
+         "study", "work", "study",
+         "work", "study", "work",
+         "work", "study"],
+    ),
+    # --- Engineering (lockstep co-op). Stream 8 leaves more time to settle in
+    # (first work term later); Stream 4 starts co-op earlier. Engineering
+    # schedules 6 work terms (5 required to graduate).
+    # Source: uwaterloo.ca/engineering/undergraduate-students/co-op-experience
     "eng-stream8": _build(
-        "eng-stream8", "Engineering Stream 8 (first work term after 2A)", "Engineering", True,
+        "eng-stream8", "Engineering Stream 8 (later first work term — after 2A)", "Engineering", True,
         ["study", "study", "off",
          "study", "work", "study",
          "work", "study", "work",
@@ -104,7 +137,7 @@ SEQUENCES: dict[str, Sequence] = {
          "work", "study"],
     ),
     "eng-stream4": _build(
-        "eng-stream4", "Engineering Stream 4 (first work term after 1B)", "Engineering", True,
+        "eng-stream4", "Engineering Stream 4 (earlier first work term — after 1B)", "Engineering", True,
         ["study", "study", "work",
          "study", "work", "study",
          "work", "study", "work",
@@ -127,10 +160,29 @@ SEQUENCES: dict[str, Sequence] = {
 }
 
 FACULTY_SEQUENCES: dict[str, list[str]] = {
-    "Math": ["math-regular", "math-coop"],
+    "Math": ["math-regular", "math-coop", "math-coop-2", "math-coop-3", "math-coop-4"],
     "Engineering": ["eng-stream8", "eng-stream4"],
     "Science": ["sci-regular", "sci-coop"],
 }
+
+# Typical UW Engineering stream assignment by program (programs marked "either"
+# are assigned Stream 4 or 8 in June, or by request).
+# Source: uwaterloo.ca/engineering/undergraduate-students/co-op-experience
+ENG_STREAM_BY_PROGRAM: dict[str, str] = {
+    "Software Engineering": "eng-stream8",
+    "Systems Design Engineering": "eng-stream4",
+    "Electrical Engineering": "eng-stream4",
+    "Mechatronics Engineering": "either",
+    "Mechanical Engineering": "either",
+    "Computer Engineering": "either",
+}
+
+
+def default_eng_stream(program: str | None) -> str | None:
+    """Typical stream for an Engineering program, or None if it's a free choice."""
+
+    key = ENG_STREAM_BY_PROGRAM.get(program or "")
+    return key if key and key != "either" else None
 
 
 # --------------------------------------------------------------------------- #
@@ -217,6 +269,20 @@ def sequences_for_faculty(faculty: str) -> list[Sequence]:
     return [SEQUENCES[k] for k in FACULTY_SEQUENCES.get(faculty, [])]
 
 
+def describe_sequences(faculty: str) -> str:
+    """Human-readable list of the co-op sequence options for a faculty."""
+
+    seqs = sequences_for_faculty(faculty)
+    if not seqs:
+        return "I don't have sequence options for that faculty."
+    lines = [f"Co-op / study sequences for {faculty}:"]
+    for s in seqs:
+        works = sum(1 for slot in s.slots if slot.kind == "work")
+        suffix = f" — {works} work terms" if s.coop else ""
+        lines.append(f"  - {s.name}{suffix}")
+    return "\n".join(lines)
+
+
 def match_sequence(text: str, faculty: str) -> str | None:
     """Map free text to a sequence key within the given faculty."""
 
@@ -231,6 +297,12 @@ def match_sequence(text: str, faculty: str) -> str | None:
         reg = [k for k in options if "regular" in k]
         if reg:
             return reg[0]
+    if faculty == "Math":
+        # "sequence 3" / "seq 2" / "co-op stream 4" → the specific Math sequence.
+        m = re.search(r"\b(?:seq(?:uence)?|stream)\s*0?([1-4])\b", low)
+        if m:
+            n = m.group(1)
+            return "math-coop" if n == "1" else f"math-coop-{n}"
     if any(k in low for k in ["co-op", "coop", "co op"]):
         co = [k for k in options if "coop" in k or "stream" in k]
         if co:

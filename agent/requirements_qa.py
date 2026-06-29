@@ -9,7 +9,33 @@ from data.degree_plans import (
     plan_from_intake,
     resolve_requirements,
 )
+from data.program_templates import format_first_year
 from data.uw_api import data_source
+
+# Kept specific so revision turns ("make 1A lighter") never match — bare term
+# labels like "1a" are excluded; "1a courses" must name courses.
+_FIRST_YEAR_PHRASES = (
+    "first year", "first-year", "year one", "year 1", "1a courses", "1b courses",
+    "first term courses", "starting courses", "what do i take first",
+    "what should i take first", "standard first", "what to take in first",
+)
+
+
+def _is_first_year_question(text: str) -> bool:
+    low = text.lower()
+    return any(p in low for p in _FIRST_YEAR_PHRASES)
+
+
+def first_year_answer(text: str, intake: dict[str, Any]) -> str | None:
+    """Standard first-year courses for the program in the text, or the student's."""
+
+    from data.sequences import identify_program
+
+    prog = intake.get("program")
+    named = identify_program(text)
+    if named:
+        prog = named.name
+    return format_first_year(prog)
 
 # Curated specialization blurbs (simplified from UW calendar; not a registrar source).
 _SPECIALIZATION_GUIDE: dict[str, dict[str, Any]] = {
@@ -52,6 +78,8 @@ def is_requirements_question(text: str) -> bool:
         "courses do i need", "courses i need", "need to take", "requirements",
         "how do i get", "how to get", "what is required",
     ))
+    if _is_first_year_question(text):
+        return True
     topic = any(p in low for p in (
         "specialization", "specialisation", "spec", "minor", "major", "degree", "graduate",
         "business", "ai ", "artificial intelligence",
@@ -74,8 +102,16 @@ def format_requirements_answer(
     intake: dict[str, Any],
     plan: dict[str, Any] | None,
 ) -> str:
+    if _is_first_year_question(text):
+        fy = first_year_answer(text, intake)
+        if fy:
+            return fy
+
     spec_key = _pick_specialization_key(intake, text)
     if not spec_key:
+        fy = first_year_answer(text, intake)
+        if fy:
+            return fy
         return (
             "Which specialization are you asking about? "
             "(e.g. Business, AI, Computational Math)"

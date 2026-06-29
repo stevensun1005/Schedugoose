@@ -19,6 +19,7 @@ from data.degree_plans import (
     resolve_requirements,
 )
 from data.program_reqs import MIN_DEGREE_UNITS
+from data.program_templates import first_year_pins
 from data.sequences import Sequence, format_term, get_sequence, resolve_term
 from data.uw_api import fetch_courses
 from agent.term_pipeline import (
@@ -127,6 +128,23 @@ def _units_so_far(catalog: list[Course], completed: set[str]) -> float:
     return sum(by_id[cid].units for cid in completed if cid in by_id and counts_toward_degree(by_id[cid]))
 
 
+def _apply_program_template(
+    intake: dict[str, Any], base_cfg: dict[str, Any], catalog_ids: set[str],
+) -> None:
+    """Pin the program's standard first-year courses (UW recommended sequence)."""
+
+    pins = first_year_pins(intake.get("program"), catalog_ids)
+    if not pins:
+        return
+    tr = base_cfg.setdefault("term_requirements", {})
+    for term, courses in pins.items():
+        existing = list(tr.get(term, []))
+        for c in courses:
+            if c not in existing:
+                existing.append(c)
+        tr[term] = existing
+
+
 def _apply_residency_language(intake: dict[str, Any], base_cfg: dict[str, Any]) -> None:
     residency = intake.get("residency")
     if not residency:
@@ -163,6 +181,7 @@ def plan_sequence(
     degree_reqs = resolve_requirements(degree_plan)
     remaining = _remaining_reqs(degree_reqs, catalog, completed)
     min_easy = int(base_cfg.get("min_easy_courses", 0))
+    _apply_program_template(intake, base_cfg, {c.course_id for c in catalog})
     _apply_residency_language(intake, base_cfg)
 
     terms_out: list[dict[str, Any]] = []

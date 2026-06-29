@@ -65,6 +65,15 @@ def test_career_goal_not_invented_on_other_turn() -> None:
     assert out.get("career_goal") is None
 
 
+def test_sequence_answer_not_captured_as_career() -> None:
+    # Reported bug: answering "co-op" set career_goal to "co-op".
+    prior = {"program": "Computer Science", "faculty": "Math", "reqs_key": "CS-Major",
+             "residency": "domestic"}  # answering the sequence question now
+    u = TurnUnderstanding(intent="onboarding", sequence="co-op", career_goal="co-op")
+    out = apply_understanding(prior, u, text="co-op")
+    assert out.get("career_goal") is None
+
+
 def test_career_goal_accepted_when_stated() -> None:
     prior = {"program": "Computer Science", "faculty": "Math", "reqs_key": "CS-Major"}
     u = TurnUnderstanding(intent="onboarding", career_goal="data science")

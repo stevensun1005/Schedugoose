@@ -20,15 +20,23 @@ _CAREER_INTENT = (
     "hoping to", "dream", "into ", "focus on",
 )
 
+# Answers to *other* onboarding questions the LLM sometimes mislabels as a
+# career — never accept these as a career goal.
+_NON_CAREER = {
+    "co-op", "coop", "co op", "regular", "no co-op", "domestic", "international",
+    "intl", "yes", "no", "new", "returning", "skip", "none", "first year",
+    "first-year", "exploring options",
+}
+
 
 def _user_stated_career(text: str, career_goal: str | None) -> bool:
     """True only when the user actually expressed a career this turn."""
 
+    cg = (career_goal or "").strip().lower()
+    if not cg or cg in _NON_CAREER:
+        return False
     low = (text or "").lower()
     if has_career_hint(low):
-        return True
-    cg = (career_goal or "").strip().lower()
-    if cg and cg in low:
         return True
     return any(p in low for p in _CAREER_INTENT)
 
@@ -157,7 +165,7 @@ def apply_understanding(
     if understanding.start_term and not out.get("start_term"):
         out["start_term"] = understanding.start_term.model_dump()
 
-    if understanding.career_goal:
+    if understanding.career_goal and understanding.career_goal.strip().lower() not in _NON_CAREER:
         # Accept a career goal only when the user actually expressed one, or when
         # career was the single field still being asked for (so a short reply like
         # "robots" counts). Uses the *pre-update* intake so an assumed goal slipped

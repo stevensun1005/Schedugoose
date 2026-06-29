@@ -88,8 +88,11 @@ what's missing:
    plans around what's left. Say nothing and you're treated as a **brand-new
    first-year** — a clean schedule you can then edit.
 3. **Residency** — international or domestic (language / English rules).
-4. **Sequence / stream** — Engineering is lockstep (Stream 4 vs Stream 8);
-   Math/Science offer Regular vs Co-op.
+4. **Sequence / stream** — Math/CS offer **Regular** or one of **four co-op
+   sequences** (Sequence 1–4, differing in when work terms fall; Seq 1 is the
+   common pick — UW's actual entry sequences). Engineering is lockstep:
+   **Stream 4** (earlier first work term) vs **Stream 8** (more time to settle
+   in). Say "sequence 3" or "stream 8" and it's matched.
 5. **Start term** — e.g. "Fall 2026" or "Winter 2027" (your 1A); the whole
    sequence is anchored to the season you give, interleaving co-op work terms.
 6. **Career + preferences** — *optional*. "aiming for data science, keep it
@@ -146,6 +149,7 @@ same edges functionally, so the agent runs with or without LangGraph installed.
 |------|--------|------------|
 | Courses, sections, times, instructors, capacity | **UW Open Data API v3** (official, API key) with bundled **mock catalog fallback** | Authoritative — no scraping required |
 | Program / graduation requirements | Undergraduate calendar (curated) | Public |
+| **Standard first-year courses + recommended timelines** | UW advising pages (curated, with source links) | Public |
 | Career → skills → courses mapping | Self-built knowledge base (RAG) | Owned |
 | Course difficulty / workload | Workload-balance signal | Optional, source-checked |
 
@@ -154,6 +158,16 @@ sanctioned, no scraping. Without `UW_API_KEY` the planner transparently falls
 back to a bundled mock catalog, so the whole system runs offline. Difficulty
 signals are handled separately and treated as optional (see
 [Notes & Compliance](#notes--compliance)).
+
+**Program knowledge** (`data/program_templates.py`) curates each program's
+**standard first-year courses** and a **recommended term-by-term timeline**
+(when CS 246, STAT 230, CS 341, … are normally taken), distilled from UW's
+[new-math-students](https://uwaterloo.ca/new-math-students/course-selection) and
+[CS suggested-sequence](https://cs.uwaterloo.ca/suggested-sequences) advising
+pages (sources are cited in the file). The planner **pins first year to the
+official template** for catalog-supported programs, the advisor cites it ("the
+standard first year for Software Engineering is…"), and course Q&A reports when a
+course is normally taken.
 
 ---
 
@@ -401,6 +415,7 @@ schedugoose/
 │   ├── mock_data.py            # bundled offline catalog
 │   ├── rag_store.py            # career→course RAG (Mongo vector + cosine)
 │   ├── degree_plans.py  program_reqs.py  sequences.py  electives.py
+│   ├── program_templates.py    # standard first-year + recommended timelines (UW)
 │   ├── prereqs.py              # requirementsDescription → prereq codes
 │   ├── restrictions.py         # "<program> students only" eligibility (H6)
 │   └── prefilter.py  course_codes.py  term_codes.py  cache.py
