@@ -19,11 +19,10 @@ def gather_constraints(state: PlannerState) -> dict[str, Any]:
     intake = update_intake(state.get("intake", {}) or {}, text)
     prev = state.get("config")
 
-    # Preferences (load / weights / time / easy-course). Program-req defaults
-    # come from the intake's degree template downstream.
     config, used_llm = to_config(text, intake.get("reqs_key", ""), prev)
+    intake = update_intake(intake, text, wants_easy=int(config.get("min_easy_courses", 0)) > 0)
 
-    complete = is_complete(intake)
+    complete = is_complete(intake, config)
     career_goal = intake.get("career_goal") or state.get("career_goal", "") or text
 
     return {
@@ -37,4 +36,5 @@ def gather_constraints(state: PlannerState) -> dict[str, Any]:
 
 def clarify(state: PlannerState) -> dict[str, Any]:
     intake = state.get("intake", {}) or {}
-    return {"clarification": next_question(intake), "needs_clarification": True}
+    config = state.get("config") or {}
+    return {"clarification": next_question(intake, config), "needs_clarification": True}
