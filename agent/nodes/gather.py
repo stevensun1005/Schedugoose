@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from agent.intake import apply_elective_inference, fill_intake_offline, is_complete
+from agent.intake import apply_elective_inference, fill_intake_offline, is_complete, parse_standing
 from agent.llm import llm_available
 from agent.revision import revision_delta
 from agent.semantic import to_config
@@ -50,6 +50,22 @@ def gather_constraints(state: PlannerState) -> dict[str, Any]:
     # "general". A bare greeting with no signal leaves picks untouched.
     intake = apply_elective_inference(intake, text, config, understanding=understanding)
 
+    # Standing / transcript — captured during onboarding (before a plan exists).
+    # A brand-new student is the default; we only record what they actually tell us.
+    profile_update: dict[str, Any] | None = None
+    if not state.get("plan"):
+        standing, completed_codes = parse_standing(text)
+        if standing:
+            intake["standing"] = standing
+        if completed_codes:
+            intake["standing"] = "returning"
+            prev_completed = list((state.get("profile") or {}).get("completed") or [])
+            merged = list(dict.fromkeys(prev_completed + completed_codes))
+            intake["completed"] = merged
+            profile_update = {**(state.get("profile") or {}), "completed": merged}
+            # A pasted transcript is an onboarding answer, not a "what is CS 135?" lookup.
+            answering_onboarding = True
+
     if not intake.get("career_goal") and all(
         intake.get(k) for k in ("program", "residency", "sequence", "start_term")
     ):
@@ -59,7 +75,7 @@ def gather_constraints(state: PlannerState) -> dict[str, Any]:
     career_goal = intake.get("career_goal") or state.get("career_goal", "") or text
     turn_revision = revision_delta(prev, config)
 
-    return {
+    out_state: dict[str, Any] = {
         "intake": intake,
         "career_goal": career_goal,
         "config": config,
@@ -73,6 +89,9 @@ def gather_constraints(state: PlannerState) -> dict[str, Any]:
         "llm_parse_failed": llm_expected and not used_understand,
         "llm_offline": llm_offline if not used_understand else False,
     }
+    if profile_update is not None:
+        out_state["profile"] = profile_update
+    return out_state
 
 
 def clarify(state: PlannerState) -> dict[str, Any]:

@@ -2,9 +2,29 @@
 
 from __future__ import annotations
 
-from agent.advisory import advisory_reply
+from agent.advisory import _fallback_advisory, advisory_reply
 from agent.graph import run_turn
 from agent.intent_schema import TurnUnderstanding
+
+
+def test_no_career_does_not_assume_data_science() -> None:
+    # Reported bug: advisory pushed "data science" with no stated goal.
+    plan = {"terms": [{"label": "4A", "kind": "study", "courses": ["CS 486", "CS 480"]}]}
+    text = _fallback_advisory({"intake": {"career_goal": "exploring options"}, "plan": plan, "rag_hits": []})
+    # It must not assume DS is the goal — it should say none was given and invite one.
+    assert "haven't told me" in text.lower() and "specific career" in text.lower()
+
+
+def test_advisory_only_suggests_real_courses_not_in_plan() -> None:
+    plan = {"terms": [{"label": "4A", "kind": "study", "courses": ["CS 486"]}]}
+    state = {
+        "intake": {"career_goal": "data science"}, "plan": plan,
+        "rag_hits": [{"courses": ["STAT 341", "CS 486", "MATH 240"]}],  # MATH 240 not real, CS 486 in plan
+    }
+    text = _fallback_advisory(state)
+    assert "STAT 341" in text          # real + not in plan
+    assert "MATH 240" not in text      # invented course is filtered out
+    assert "CS 486" not in text        # already in the plan, not re-suggested
 
 
 def test_explain_uses_advisory_not_template(monkeypatch) -> None:

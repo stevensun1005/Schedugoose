@@ -83,20 +83,28 @@ what's missing:
 
 1. **Program** — "I'm a first-year CS student" → identifies your faculty
    (Math / Engineering / Science) and degree requirements.
-2. **Residency** — international or domestic (language / English rules).
-3. **Sequence / stream** — Engineering is lockstep (Stream 4 vs Stream 8);
+2. **Standing / transcript** — new first-year, or returning? If you've already
+   taken courses, paste them ("CS 135, MATH 135") and the plan skips them and
+   plans around what's left. Say nothing and you're treated as a **brand-new
+   first-year** — a clean schedule you can then edit.
+3. **Residency** — international or domestic (language / English rules).
+4. **Sequence / stream** — Engineering is lockstep (Stream 4 vs Stream 8);
    Math/Science offer Regular vs Co-op.
-4. **Start term** — e.g. "Fall 2026" (your 1A); the plan is built forward along
-   the sequence, interleaving co-op work terms.
-5. **Career + preferences** — "aiming for data science, keep it light, no mornings".
+5. **Start term** — e.g. "Fall 2026" or "Winter 2027" (your 1A); the whole
+   sequence is anchored to the season you give, interleaving co-op work terms.
+6. **Career + preferences** — *optional*. "aiming for data science, keep it
+   light, no mornings". If you don't name a career, Schedugoose won't invent one
+   — it plans a solid general foundation and asks if you want to set a direction.
    If you ask for at least one easy course, it also asks which electives you'd
    like (or you can say "skip" and it picks easy ones). Then it plans every
    study term: 1A → 4B.
 
 After onboarding you can **revise** ("no music in 1A"), ask **career advice**
 ("courses for data science?"), or **explain** the plan — without re-pasting the
-full schedule. The chat UI shows an AI badge per reply (understood / explained /
-rules-only).
+full schedule. Advice is **grounded in the real catalog**: Schedugoose only
+references courses that exist (with their real titles), never claims you uploaded
+a plan, and never recommends a course already in your schedule. The chat UI shows
+an AI badge per reply (understood / explained / rules-only).
 
 Each study term is an independent CP-SAT solve (conflict-free, within your
 course-load); prerequisites unlock as earlier terms complete; courses are steered
@@ -237,7 +245,7 @@ y[c] = 1   for each must-include course
 y[c] = 0   for each must-avoid course
 ```
 
-**(H6) Prerequisites & term** — handled in **pre-filtering**, not in the solver: drop courses whose prereqs aren't met (against the transcript / earlier terms) and keep only sections actually offered in the target term. Simpler and faster than encoding as constraints.
+**(H6) Prerequisites, enrollment restrictions & term** — handled in **pre-filtering**, not in the solver: drop courses whose prereqs aren't met (against the transcript / earlier terms), drop courses the student isn't *eligible* for (UW lists `"<program> students only"` clauses — e.g. STAT 206 is Software-Eng-only and must never appear for a CS student), and keep only sections actually offered in the target term. Simpler and faster than encoding as constraints. Prereq/restriction text is parsed from the live `requirementsDescription` field (carrying a subject across listed numbers, like `"One of CS 240, 245, 246"`, à la UWFlow's importer).
 
 ### Objective (soft preferences)
 
@@ -393,7 +401,9 @@ schedugoose/
 │   ├── mock_data.py            # bundled offline catalog
 │   ├── rag_store.py            # career→course RAG (Mongo vector + cosine)
 │   ├── degree_plans.py  program_reqs.py  sequences.py  electives.py
-│   └── prereqs.py  prefilter.py  course_codes.py  term_codes.py  cache.py
+│   ├── prereqs.py              # requirementsDescription → prereq codes
+│   ├── restrictions.py         # "<program> students only" eligibility (H6)
+│   └── prefilter.py  course_codes.py  term_codes.py  cache.py
 ├── eval/
 │   ├── test_cases.jsonl        # multi-turn onboarding conversations
 │   ├── checker.py              # machine-verifiable plan checker

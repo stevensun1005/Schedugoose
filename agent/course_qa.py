@@ -8,6 +8,7 @@ from typing import Any
 
 from agent.llm import complete_text
 from agent.semantic import extract_course_codes, normalize_course_code
+from data.restrictions import student_eligible
 from data.uw_api import lookup_course
 
 _INFO_PHRASES = (
@@ -42,6 +43,7 @@ _SYSTEM = """You are Schedugoose, a University of Waterloo course-planning assis
 The user asked about one specific course. Answer using ONLY the course facts JSON below.
 - Lead with what the course is about (use description when present).
 - Mention prerequisites using prereqs_text or prereqs when present (quote UW requirements when available).
+- If "restricted_to" is non-empty, the course is reserved for those students ONLY. Say so plainly and, if it doesn't match the student's program, tell them they are NOT eligible — never claim it is open to everyone.
 - If the course appears in their plan, note which term.
 - Do not invent content, instructors, or requirements.
 - Be concise (2–5 sentences). Reply in the same language as the user (English or Chinese)."""
@@ -117,6 +119,9 @@ def gather_course_facts(
                 facts["categories"] = list(
                     _field(course, "categories") or facts.get("categories") or []
                 )
+                facts["restricted_to"] = list(
+                    _field(course, "restricted_to") or facts.get("restricted_to") or []
+                )
                 break
 
     facts["plan_term"] = _plan_term_for_course(plan, course_id)
@@ -124,6 +129,12 @@ def gather_course_facts(
         facts["prereqs_text"] = facts["requirements_description"]
     elif facts.get("prereqs"):
         facts["prereqs_text"] = "Prerequisites: " + ", ".join(facts["prereqs"])
+
+    restricted = facts.get("restricted_to") or []
+    if restricted:
+        prog = (intake or {}).get("program")
+        fac = (intake or {}).get("faculty")
+        facts["eligible_for_student"] = student_eligible(restricted, prog, fac)
     return facts
 
 
@@ -142,6 +153,13 @@ def _template_answer(facts: dict[str, Any]) -> str:
     cats = facts.get("categories") or []
     if cats:
         lines.append(f"Categories: {', '.join(cats)}.")
+    restricted = facts.get("restricted_to") or []
+    if restricted:
+        who = ", ".join(restricted)
+        line = f"Enrollment restriction: **{who} students only**."
+        if facts.get("eligible_for_student") is False:
+            line += " Based on your program, you are **not eligible** to take this course."
+        lines.append(line)
     term = facts.get("plan_term")
     if term:
         lines.append(f"In your current plan: scheduled in **{term}**.")

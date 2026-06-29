@@ -7,9 +7,30 @@ from typing import Any
 
 from agent.intent_schema import VALID_MINORS, TurnUnderstanding
 from agent.llm import complete_structured, llm_available
+from agent.semantic import has_career_hint
 from agent.state import PlannerState, last_user_message
 from data.degree_plans import SPECIALIZATIONS, DegreePlan, plan_from_intake, plan_to_dict
 from data.sequences import identify_program, match_sequence
+
+# Phrases that show the user is volunteering a career goal (so an LLM-extracted
+# career is grounded, not assumed).
+_CAREER_INTENT = (
+    "want to", "wanna", "i want", "i'd like", "interested in", "aspire",
+    "looking to", "career in", "work in", "aiming", "become", "goal is",
+    "hoping to", "dream", "into ", "focus on",
+)
+
+
+def _user_stated_career(text: str, career_goal: str | None) -> bool:
+    """True only when the user actually expressed a career this turn."""
+
+    low = (text or "").lower()
+    if has_career_hint(low):
+        return True
+    cg = (career_goal or "").strip().lower()
+    if cg and cg in low:
+        return True
+    return any(p in low for p in _CAREER_INTENT)
 
 _SYSTEM = """You are the understanding layer for Schedugoose, a University of Waterloo course planner.
 
@@ -137,7 +158,17 @@ def apply_understanding(
         out["start_term"] = understanding.start_term.model_dump()
 
     if understanding.career_goal:
-        out["career_goal"] = understanding.career_goal.strip()
+        # Accept a career goal only when the user actually expressed one, or when
+        # career was the single field still being asked for (so a short reply like
+        # "robots" counts). Uses the *pre-update* intake so an assumed goal slipped
+        # in alongside another answer (e.g. the start-term turn) is rejected.
+        asked_for_career = (
+            intake.get("program") and intake.get("residency")
+            and intake.get("sequence") and intake.get("start_term")
+            and not intake.get("career_goal")
+        )
+        if _user_stated_career(text, understanding.career_goal) or asked_for_career:
+            out["career_goal"] = understanding.career_goal.strip()
 
     specs = [s for s in understanding.specializations if s in SPECIALIZATIONS]
     minors = [m for m in understanding.minors if m in VALID_MINORS]

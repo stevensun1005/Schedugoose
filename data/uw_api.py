@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 
 from data.prereqs import prereqs_from_requirements
+from data.restrictions import restriction_from_requirements
 from data.mock_data import MOCK_ROWS, RawRow
 from data.term_codes import term_code_from_start
 from scheduler.types import Course, Section, TimeSlot, hhmm_to_minutes
@@ -59,6 +60,9 @@ def normalize_rows(rows: list[RawRow]) -> list[Course]:
         cid = r["course_id"]
         course = by_course.get(cid)
         if course is None:
+            restricted = list(r.get("restricted_to", [])) or restriction_from_requirements(
+                r.get("requirements_description", "")
+            )
             course = Course(
                 course_id=cid,
                 title=r.get("title", cid),
@@ -67,6 +71,7 @@ def normalize_rows(rows: list[RawRow]) -> list[Course]:
                 categories=list(r.get("categories", [])),
                 easiness=float(r.get("easiness", 0.0)),
                 prof_rating=float(r.get("prof_rating", 0.0)),
+                restricted_to=restricted,
                 sections=[],
             )
             by_course[cid] = course
@@ -205,6 +210,8 @@ def _fetch_live(term: str, subjects: list[str]) -> list[RawRow]:
                         meetings=[{"weekdays": "MWF", "start": "10:00", "end": "11:20"}],
                         easiness=0.5,
                         prof_rating=0.6,
+                        restricted_to=restriction_from_requirements(req_desc),
+                        requirements_description=req_desc,
                     ))
     return rows
 
@@ -279,6 +286,8 @@ def lookup_course(
             "units": float(mock.get("units", 0.5)) if mock else 0.5,
             "prereqs": list(mock.get("prereqs", [])) if mock else [],
             "categories": list(mock.get("categories", [])) if mock else [],
+            "restricted_to": list(mock.get("restricted_to", [])) if mock else [],
+            "requirements_description": mock.get("requirements_description", "") if mock else "",
             "source": "mock",
         }
 
@@ -309,6 +318,9 @@ def lookup_course(
                     parsed = prereqs_from_requirements(req_desc)
                     if parsed:
                         out["prereqs"] = parsed
+                    restricted = restriction_from_requirements(req_desc)
+                    if restricted:
+                        out["restricted_to"] = restricted
                 out["source"] = "live"
                 return out
         out = _from_mock()

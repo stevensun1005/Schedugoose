@@ -190,6 +190,8 @@ def plan_sequence(
             slot_label=slot.label,
             career_goal=career_goal,
             grounded_codes=grounded_codes,
+            program=intake.get("program"),
+            faculty=intake.get("faculty"),
         )
         term_avoid = base_cfg.get("term_avoid") or {}
         avoid_ids = set(term_avoid.get(slot.label, []))
@@ -206,17 +208,32 @@ def plan_sequence(
             })
             continue
 
+        units_done = _units_so_far(catalog, completed)
+        remaining_credits = round(MIN_DEGREE_UNITS - units_done, 2)
+
+        # Returning students may already satisfy the degree before the sequence
+        # ends — stop adding courses instead of overshooting 20 credits / 40 courses.
+        if remaining_credits <= 0 and not remaining:
+            terms_out.append({
+                "label": slot.label, "kind": "study",
+                "season": cal["season"], "year": cal["year"], "display": format_term(cal),
+                "courses": [], "sections": [],
+                "note": "Degree requirements already met — no courses needed this term.",
+            })
+            continue
+
         _boost_needed(candidates, remaining)
         _boost_elective_picks(candidates, pending_electives)
 
-        units_done = _units_so_far(catalog, completed)
         easy_floor = _min_easy_this_term(min_easy, remaining, slot.label)
 
         cfg_data = dict(base_cfg)
         credit = dict(cfg_data.get("credit_load") or {})
         if units_done < MIN_DEGREE_UNITS:
-            credit["min"] = 2.5
-            credit["max"] = 2.5
+            # Cap the final term so completed credits aren't double-counted past 20.
+            cap = min(2.5, remaining_credits)
+            credit["min"] = cap
+            credit["max"] = cap
         cfg_data["credit_load"] = credit
         cfg_data["weights"] = dict(cfg_data.get("weights") or {})
         if sum(remaining.get(k, 0) for k in ("CS-Core", "Math-Core")) > 0:

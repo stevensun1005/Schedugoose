@@ -33,6 +33,8 @@ def retrieve(state: PlannerState) -> dict[str, Any]:
         slot_label=slot,
         career_goal=career,
         grounded_codes=grounded,
+        program=intake.get("program"),
+        faculty=intake.get("faculty"),
     )
 
     rag_hits = [

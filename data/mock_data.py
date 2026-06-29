@@ -30,6 +30,8 @@ class RawRow(TypedDict, total=False):
     meetings: list[RawMeeting]
     easiness: float
     prof_rating: float
+    restricted_to: list[str]
+    requirements_description: str
 
 
 _SLOTS: list[tuple[str, str, str]] = [
@@ -49,6 +51,8 @@ def _one(
     prof_rating: float = 0.6,
     instructor: str = "Staff",
     units: float = 0.5,
+    restricted_to: list[str] | None = None,
+    requirements_description: str = "",
 ) -> RawRow:
     days, start, end = _SLOTS[slot % len(_SLOTS)]
     return RawRow(
@@ -58,6 +62,8 @@ def _one(
         term="ANY", cap=120, enrolled=0,
         meetings=[RawMeeting(weekdays=days, start=start, end=end)],
         easiness=easiness, prof_rating=prof_rating,
+        restricted_to=restricted_to or [],
+        requirements_description=requirements_description,
     )
 
 
@@ -86,7 +92,7 @@ MOCK_ROWS: list[RawRow] = [
     # ---- 2A ----
     _one("CS 246", "Object-Oriented Software Development", 0, prereqs=["CS 136"], categories=["CS-Core", "CS-2xx"]),
     _one("CS 245", "Logic and Computation", 2, prereqs=["CS 136"], categories=["CS-Core", "CS-2xx", "CS-Theory"]),
-    _one("MATH 239", "Introduction to Combinatorics", 8, prereqs=["MATH 136"], categories=["Math-Core", "MATH-2xx"]),
+    _one("MATH 239", "Introduction to Combinatorics", 8, prereqs=["MATH 136"], categories=["Math-Core", "MATH-2xx", "Math-Minor"]),
     _one("MATH 237", "Calculus 3 for Honours Math", 6, prereqs=["MATH 138"], categories=["Math-Core", "MATH-2xx"]),
     _one("STAT 230", "Probability", 4, prereqs=["MATH 138"], categories=["Math-Core", "STAT-Core", "STAT-2xx"]),
     _one("PHIL 145", "Critical Thinking", 5, categories=["Elective"], easiness=0.85),
@@ -95,21 +101,28 @@ MOCK_ROWS: list[RawRow] = [
     # ---- 2B ----
     _one("CS 240", "Data Structures and Data Management", 7, prereqs=["CS 136"], categories=["CS-Core", "CS-2xx"]),
     _one("CS 241", "Foundations of Sequential Programs", 3, prereqs=["CS 246"], categories=["CS-Core", "CS-2xx"]),
+    _one("CS 251", "Computer Organization and Design", 13, prereqs=["CS 241"], categories=["CS-Core", "CS-2xx", "CS-Systems"]),
     _one("STAT 231", "Statistics", 9, prereqs=["STAT 230"], categories=["STAT-Core", "STAT-2xx"]),
-    _one("STAT 206", "Statistics for Software Engineering", 11, prereqs=["MATH 239"], categories=["STAT-Core", "STAT-2xx"]),
+    _one("STAT 206", "Statistics for Software Engineering", 11, prereqs=["MATH 135"],
+         categories=["STAT-Core", "STAT-2xx"],
+         restricted_to=["Software Eng"],
+         requirements_description="Prereq: MATH 119 or 138; Software Eng students only."),
     _one("PSYCH 101", "Introduction to Psychology", 5, categories=["Elective"], easiness=0.85),
     _one("ARTS 130", "Introduction to Digital Media", 15, categories=["Elective"], easiness=0.84),
 
     # ---- 3A ----
-    _one("CS 341", "Algorithms", 6, prereqs=["CS 240"], categories=["CS-3xx", "CS-Theory"], easiness=0.3),
-    _one("CS 350", "Operating Systems", 2, prereqs=["CS 241", "CS 246"], categories=["CS-3xx", "CS-Systems"]),
+    _one("CS 341", "Algorithms", 6, prereqs=["CS 240"], categories=["CS-Core", "CS-3xx", "CS-Theory"], easiness=0.3),
+    _one("CS 350", "Operating Systems", 2, prereqs=["CS 241", "CS 246"], categories=["CS-Core", "CS-3xx", "CS-Systems"]),
     _one("CS 348", "Introduction to Database Management", 1, prereqs=["CS 240"], categories=["CS-3xx", "CS-Systems"]),
     _one("STAT 341", "Computational Statistics & Data Analysis", 3, prereqs=["STAT 231"], categories=["STAT-ML", "STAT-3xx"]),
+    _one("STAT 330", "Mathematical Statistics", 10, prereqs=["STAT 231"], categories=["STAT-Core", "STAT-3xx"], easiness=0.4),
+    _one("STAT 333", "Applied Probability", 14, prereqs=["STAT 230"], categories=["STAT-Core", "STAT-3xx"], easiness=0.45),
+    _one("STAT 334", "Probability Models in Business", 1, prereqs=["STAT 230"], categories=["STAT-Core", "STAT-3xx"], easiness=0.55),
     _one("CS 343", "Parallel and Concurrent Programming", 12, prereqs=["CS 241"], categories=["CS-3xx", "CS-Systems"]),
     _one("EARTH 121", "Introductory Earth Sciences", 13, categories=["Elective"], easiness=0.83),
 
     # ---- 3B ----
-    _one("CS 360", "Introduction to the Theory of Computing", 8, prereqs=["CS 245", "CS 240"], categories=["CS-3xx", "CS-Theory"]),
+    _one("CS 360", "Introduction to the Theory of Computing", 8, prereqs=["CS 245", "CS 240"], categories=["CS-Core", "CS-3xx", "CS-Theory"]),
     _one("CS 370", "Numerical Computation", 4, prereqs=["MATH 138", "CS 136"], categories=["CS-3xx"]),
     _one("CS 442", "Principles of Programming Languages", 9, prereqs=["CS 241"], categories=["CS-4xx"]),
     _one("CS 466", "Algorithm Design and Analysis", 10, prereqs=["CS 341"], categories=["CS-4xx", "CS-Theory"]),
@@ -132,7 +145,9 @@ MOCK_ROWS: list[RawRow] = [
     _one("CS 454", "Distributed Systems", 0, prereqs=["CS 350", "CS 348"], categories=["CS-4xx", "CS-Systems"]),
     _one("CS 459", "Privacy, Cryptography, Security", 1, prereqs=["CS 350"], categories=["CS-4xx", "CS-Security"]),
     _one("STAT 332", "Applied Linear Models", 2, prereqs=["STAT 231"], categories=["STAT-Core", "STAT-3xx"]),
-    _one("MATH 235", "Linear Algebra 2", 3, prereqs=["MATH 136"], categories=["Math-Core", "MATH-2xx"]),
+    _one("MATH 235", "Linear Algebra 2", 3, prereqs=["MATH 136"], categories=["Math-Core", "MATH-2xx", "Math-Minor"]),
+    _one("MATH 245", "Linear Algebra 2 (Advanced)", 11, prereqs=["MATH 235"], categories=["Math-Core", "MATH-2xx", "Math-Minor"]),
+    _one("MATH 247", "Calculus 3 (Advanced)", 13, prereqs=["MATH 237"], categories=["Math-Core", "MATH-2xx"]),
     _one("ENGL 210", "Technical Writing", 4, categories=["Comm", "Elective"], easiness=0.82),
 ]
 

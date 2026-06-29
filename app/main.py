@@ -50,6 +50,7 @@ _INDEX_HTML = """<!doctype html>
   .msg { padding:12px 16px; border-radius:14px; max-width:80%; line-height:1.5; white-space:pre-wrap; }
   .user { align-self:flex-end; background:#2a3340; }
   .bot { align-self:flex-start; background:var(--panel); border:1px solid #23262e; }
+  .bot.err { background:#221518; border-color:#4a2d35; color:#f28b82; }
   .sched { margin-top:10px; border-top:1px solid #2a2e37; padding-top:10px; display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; }
   .term { background:#0f1218; border:1px solid #2a2e37; border-radius:10px; padding:8px 10px; }
   .term.work { background:#14110a; border-color:#3a3320; }
@@ -170,28 +171,50 @@ form.addEventListener('submit', async (e) => {
   bubble(text, 'user');
   input.value = '';
   btn.disabled = true;
-  const thinking = bubble('...', 'bot');
+  const thinking = bubble('Working on it…', 'bot');
+  // Building a full plan hits the live UW API + LLM and can take ~15s; give it room.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 120000);
   try {
     const res = await fetch('/plan', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ message:text, session_id:sessionId, profile })
+      body: JSON.stringify({ message:text, session_id:sessionId, profile }),
+      signal: controller.signal
     });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw new Error('Server returned ' + res.status + (detail ? ': ' + detail.slice(0, 200) : ''));
+    }
     const data = await res.json();
     sessionId = data.session_id;
     localStorage.setItem('schedugoose_session', sessionId);
-    thinking.textContent = data.explanation;
+    thinking.textContent = data.explanation || '(no reply)';
     renderAiBadge(thinking, data);
     renderPlan(thinking, data.plan);
   } catch (err) {
-    thinking.textContent = 'Error: ' + err;
+    let msg;
+    if (err.name === 'AbortError') {
+      msg = '⏱️ That timed out. The first plan can be slow (live course data) — please try again.';
+    } else if (err instanceof TypeError) {
+      msg = "⚠️ Couldn't reach the server. Make sure it's still running "
+          + "(uvicorn app.main:app --reload) and reload this page, then try again.";
+    } else {
+      msg = '⚠️ ' + err.message;
+    }
+    thinking.textContent = msg;
+    thinking.classList.add('err');
+    input.value = text;  // keep the message so it can be resent
   } finally {
+    clearTimeout(timer);
     btn.disabled = false;
     input.focus();
   }
 });
 
 bubble("Hey! I'm Schedugoose — I help UW students plan courses term-by-term across co-op. "
-     + "Tell me about yourself in plain language (program, goals, preferences) and we'll go from there.", 'bot');
+     + "Tell me about yourself in plain language (program, goals, preferences). "
+     + "Are you a brand-new first-year, or returning? If you've already taken courses, "
+     + "list them (e.g. CS 135, MATH 135) and I'll plan around them.", 'bot');
 
 fetch('/health').then(r => r.json()).then(h => {
   const el = document.getElementById('llm-status');

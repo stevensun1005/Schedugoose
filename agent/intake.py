@@ -34,6 +34,35 @@ class Intake(TypedDict, total=False):
     start_term: dict
     career_goal: str
     elective_picks: list[str]
+    standing: str          # "new" | "returning"
+    completed: list[str]   # transcript: course codes already taken
+
+
+_NEW_STUDENT_WORDS = (
+    "new student", "brand new", "first year", "first-year", "1st year", "1a",
+    "just starting", "starting fresh", "incoming", "haven't taken", "havent taken",
+    "no courses", "none yet", "nothing yet", "fresh", "from scratch", "just started",
+)
+_DONE_CONTEXT = (
+    "taken", "took", "completed", "complete", "finished", "done", "passed",
+    "already did", "credit for", "transferred", "so far", "this is my transcript",
+)
+
+
+def parse_standing(text: str) -> tuple[str | None, list[str]]:
+    """Detect whether the student is new or returning, plus any completed courses.
+
+    Returns ``(standing, completed_codes)`` — standing is "new", "returning", or
+    None when the message says nothing about it.
+    """
+
+    low = text.lower()
+    codes = extract_course_codes(text)
+    if codes and any(k in low for k in _DONE_CONTEXT):
+        return "returning", codes
+    if any(k in low for k in _NEW_STUDENT_WORDS):
+        return "new", []
+    return None, []
 
 
 def _parse_elective_picks(text: str) -> list[str] | None:

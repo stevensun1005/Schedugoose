@@ -281,8 +281,28 @@ def format_term(term: dict) -> str:
     return f"{term['season']} {term['year']}"
 
 
-def resolve_term(start: dict, year_offset: int, season: str) -> dict:
-    """Given a Fall-start anchor, resolve the calendar (season, year) of a slot."""
+# Calendar-adjacency order *within a calendar year*: Winter→Spring→Fall. (A Fall
+# term precedes the following calendar year's Winter, so it sorts last here.)
+_CAL_POS = {"Winter": 0, "Spring": 1, "Fall": 2}
+_CAL_SEASON = ["Winter", "Spring", "Fall"]
 
-    base_year = start["year"]
-    return {"season": season, "year": base_year + year_offset}
+
+def _abs_term(season: str, year: int) -> int:
+    """Absolute term index so consecutive terms differ by exactly 1."""
+
+    return year * 3 + _CAL_POS[season]
+
+
+def resolve_term(start: dict, year_offset: int, season: str) -> dict:
+    """Resolve a slot's real (season, year), honoring the student's start season.
+
+    Sequences are built assuming a Fall 1A start, so each slot carries a
+    Fall-anchored ``(season, year_offset)``. We measure how many terms the slot
+    sits after 1A, then advance that many terms from the *actual* start term —
+    so a "Winter 2027" start shifts the whole sequence (1A → Winter 2027), not
+    just renames the year.
+    """
+
+    terms_after_1a = _abs_term(season, year_offset) - _abs_term("Fall", 0)
+    actual = _abs_term(start.get("season", "Fall"), start["year"]) + terms_after_1a
+    return {"season": _CAL_SEASON[actual % 3], "year": actual // 3}

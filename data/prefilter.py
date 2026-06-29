@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from data.course_utils import eligible_for_study_term, is_pd
+from data.restrictions import student_eligible
 from scheduler.types import Course
 
 
@@ -25,8 +26,14 @@ def prefilter_candidates(
     *,
     slot_label: str | None = None,
     study_term: bool = True,
+    program: str | None = None,
+    faculty: str | None = None,
 ) -> list[Course]:
-    """Return only courses eligible to be scheduled."""
+    """Return only courses eligible to be scheduled.
+
+    ``program`` / ``faculty`` enforce enrollment restrictions ("X students
+    only") — e.g. a CS student never sees STAT 206 (Software Eng only).
+    """
 
     completed = completed or set()
     out: list[Course] = []
@@ -37,6 +44,8 @@ def prefilter_candidates(
             if is_pd(c):
                 continue
             if slot_label and not eligible_for_study_term(c, slot_label):
+                continue
+            if not student_eligible(c.restricted_to, program, faculty):
                 continue
         elif not is_pd(c):
             continue  # work terms only take PD

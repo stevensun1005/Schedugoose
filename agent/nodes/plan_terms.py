@@ -13,7 +13,8 @@ from data.rag_store import retrieve_career_context
 def plan_terms(state: PlannerState) -> dict[str, Any]:
     intake = state.get("intake", {}) or {}
     profile = state.get("profile", {}) or {}
-    completed = set(profile.get("completed", []) or [])
+    # Transcript can come from the UI profile or be captured in chat (intake).
+    completed = set(profile.get("completed", []) or []) | set(intake.get("completed", []) or [])
     career = state.get("career_goal", "")
 
     grounded = set(state.get("grounded_codes") or [])

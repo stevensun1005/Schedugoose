@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import uuid
 
@@ -18,6 +19,7 @@ from app import sessions
 from data.program_reqs import list_programs
 
 router = APIRouter()
+_log = logging.getLogger("schedugoose")
 
 
 class ProfileIn(BaseModel):
@@ -84,7 +86,17 @@ def plan_endpoint(req: PlanRequest) -> PlanResponse:
         state["profile"] = req.profile.model_dump(exclude_none=True)
     state.setdefault("profile", {"completed": []})
 
-    result = plan(state)
+    try:
+        result = plan(state)
+    except Exception:
+        # Never 500 the chat UI: degrade to a readable reply and log the cause.
+        _log.exception("plan() failed for session %s", session_id)
+        result = dict(state)
+        result["explanation"] = (
+            "Sorry — I hit an internal error working that out. Please try rephrasing, "
+            "or send your message again."
+        )
+        result["needs_clarification"] = True
 
     # Record assistant turn and persist.
     result.setdefault("messages", state["messages"])

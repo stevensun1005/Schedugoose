@@ -108,6 +108,10 @@ class Course:
     easiness: float = 0.0           # 0-1, workload signal (higher = lighter)
     prof_rating: float = 0.0        # 0-1, instructor-quality signal
     categories: list[str] = field(default_factory=list)  # program / KB tags
+    # Enrollment restrictions parsed from "<program> students only" clauses.
+    # Empty = open to everyone. Pre-filtering drops courses a student isn't
+    # eligible for (e.g. STAT 206 is "Software Eng students only").
+    restricted_to: list[str] = field(default_factory=list)
 
     def components(self) -> list[str]:
         """Distinct component types present among this course's sections."""

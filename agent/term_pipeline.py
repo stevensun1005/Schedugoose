@@ -34,11 +34,14 @@ def retrieve_for_term(
     slot_label: str,
     career_goal: str,
     grounded_codes: set[str] | None = None,
+    program: str | None = None,
+    faculty: str | None = None,
 ) -> list[Course]:
     """Pre-filter + RAG relevance scoring for one study term."""
 
     candidates = prefilter_candidates(
         catalog, completed=completed, slot_label=slot_label, study_term=True,
+        program=program, faculty=faculty,
     )
     if not candidates:
         return []
