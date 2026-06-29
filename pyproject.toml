@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "schedugoose"
+version = "0.1.0"
+description = "A conversational course-planning agent that pairs an LLM with an OR-Tools CP-SAT solver."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Schedugoose" }]
+
+# Core dependencies: the OR scheduler + API only.
+# The integer-programming core never depends on the LLM stack (golden rule).
+dependencies = [
+    "ortools>=9.8",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "pydantic>=2.6",
+    "httpx>=0.27",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+# Conversational layer. Not required to run / test the scheduler core.
+llm = [
+    "langgraph>=0.2",
+    "langchain-core>=0.3",
+    "langchain-anthropic>=0.2",
+    "redis>=5.0",
+]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*", "agent*", "scheduler*", "data*", "eval*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
