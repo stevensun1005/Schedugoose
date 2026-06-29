@@ -1,27 +1,50 @@
 """UW Open Data API v3 wrapper + normalization.
 
-Core course data comes from Waterloo's official Open Data API -- fully
-sanctioned, no scraping. When ``UW_API_KEY`` is unset, bundled mock data is
-used so the system runs offline. Both paths normalize into :class:`Course`.
+Live path: ``/Courses/{term}/{subject}`` + ``/ClassSchedules/{term}/{subject}/{catalog}``.
+Prereq/category/easiness tags are enriched from the bundled mock catalog when available.
 """
 
 from __future__ import annotations
 
 import os
+import re
+from typing import Any
 
 import httpx
 
-from data.cache import get_or_set
+from data.prereqs import prereqs_from_requirements
 from data.mock_data import MOCK_ROWS, RawRow
+from data.term_codes import term_code_from_start
 from scheduler.types import Course, Section, TimeSlot, hhmm_to_minutes
 
 API_BASE = "https://openapi.data.uwaterloo.ca/v3"
-_CACHE_TTL_S = 60 * 60  # 1 hour -- respect API rate limits
+_CACHE_TTL_S = 60 * 60
+
+_last_data_source: str = "mock"
+MOCK_BY_ID: dict[str, RawRow] = {r["course_id"]: r for r in MOCK_ROWS}
+
+# Short blurbs when live API description is unavailable (mock-only runs).
+_MOCK_DESCRIPTIONS: dict[str, str] = {
+    "SOC 101": (
+        "An introduction to sociological concepts and interpretation — communities, "
+        "institutions, social processes, and change, with emphasis on Canadian society."
+    ),
+}
+
+_COURSE_ID_RE = re.compile(r"^([A-Za-z]{2,5})\s+(\d{3}[A-Za-z]?)$")
 
 
-# --------------------------------------------------------------------------- #
-# Normalization (shared by mock + live paths)
-# --------------------------------------------------------------------------- #
+def data_source() -> str:
+    """``live`` | ``mock`` | ``live+mock-fallback`` — set by the last :func:`fetch_courses`."""
+
+    return _last_data_source
+
+
+def _set_source(src: str) -> None:
+    global _last_data_source
+    _last_data_source = src
+
+
 def _normalize_meeting(m: dict) -> TimeSlot:
     return TimeSlot(
         weekdays=m["weekdays"],
@@ -31,8 +54,6 @@ def _normalize_meeting(m: dict) -> TimeSlot:
 
 
 def normalize_rows(rows: list[RawRow]) -> list[Course]:
-    """Group flat section rows into :class:`Course` objects."""
-
     by_course: dict[str, Course] = {}
     for r in rows:
         cid = r["course_id"]
@@ -49,102 +70,254 @@ def normalize_rows(rows: list[RawRow]) -> list[Course]:
                 sections=[],
             )
             by_course[cid] = course
-        section = Section(
-            course_id=cid,
-            component=r.get("component", "LEC"),
-            section_code=r.get("section_code", "LEC 001"),
-            times=tuple(_normalize_meeting(m) for m in r.get("meetings", [])),
-            instructor=r.get("instructor", ""),
-            term=r.get("term", ""),
-            cap=int(r.get("cap", 0)),
-            enrolled=int(r.get("enrolled", 0)),
-        )
-        course.sections.append(section)
+        sections = [
+            Section(
+                course_id=cid,
+                component=r.get("component", "LEC"),
+                section_code=r.get("section_code", "LEC 001"),
+                times=tuple(_normalize_meeting(m) for m in r.get("meetings", [])),
+                instructor=r.get("instructor", ""),
+                term=r.get("term", ""),
+                cap=int(r.get("cap", 0)),
+                enrolled=int(r.get("enrolled", 0)),
+            )
+        ]
+        if not sections[0].times:
+            sections[0] = Section(
+                course_id=cid,
+                component=r.get("component", "LEC"),
+                section_code=r.get("section_code", "LEC 001"),
+                times=(TimeSlot("MWF", 600, 660),),
+                instructor=r.get("instructor", ""),
+                term=r.get("term", ""),
+                cap=int(r.get("cap", 120)),
+                enrolled=int(r.get("enrolled", 0)),
+            )
+        course.sections.extend(sections)
     return list(by_course.values())
 
 
-# --------------------------------------------------------------------------- #
-# Live API path (best-effort mapping of the UW v3 schedule schema)
-# --------------------------------------------------------------------------- #
-_WEEKDAY_FIELDS = [
-    ("monday", "M"), ("tuesday", "T"), ("wednesday", "W"),
-    ("thursday", "Th"), ("friday", "F"), ("saturday", "Sa"), ("sunday", "Su"),
-]
+def _enrich_row(row: RawRow) -> RawRow:
+    mock = MOCK_BY_ID.get(row["course_id"])
+    if not mock:
+        return row
+    out = dict(row)
+    out["prereqs"] = list(mock.get("prereqs", []))
+    out["categories"] = list(mock.get("categories", out.get("categories", [])))
+    out["easiness"] = float(mock.get("easiness", 0.5))
+    out["prof_rating"] = float(mock.get("prof_rating", 0.6))
+    return RawRow(**out)  # type: ignore[arg-type]
 
 
-def _map_uw_schedule(raw: list[dict], term: str) -> list[RawRow]:
-    """Map UW v3 ``/ClassSchedules`` payloads into our :class:`RawRow` shape."""
-
+def _map_class_sections(
+    classes: list[dict],
+    *,
+    subject: str,
+    catalog: str,
+    title: str,
+    term: str,
+) -> list[RawRow]:
+    course_id = f"{subject} {catalog}"
     rows: list[RawRow] = []
-    for entry in raw:
-        subject = entry.get("subjectCode", "")
-        catalog = entry.get("catalogNumber", "")
-        course_id = f"{subject} {catalog}".strip()
-        for sched in entry.get("scheduleData", []) or [{}]:
-            days = "".join(
-                token for field, token in _WEEKDAY_FIELDS if sched.get(field)
-            )
+    for entry in classes:
+        comp = entry.get("courseComponent", "LEC")
+        sec = entry.get("classSection", "001")
+        scheds = entry.get("scheduleData") or []
+        if not scheds:
+            rows.append(_enrich_row(RawRow(
+                course_id=course_id, title=title, units=0.5,
+                component=comp, section_code=f"{comp} {sec}",
+                term=term,
+                cap=int(entry.get("maxEnrollmentCapacity", 0) or 120),
+                enrolled=int(entry.get("enrolledStudents", 0) or 0),
+                meetings=[{"weekdays": "MWF", "start": "10:00", "end": "11:20"}],
+            )))
+            continue
+        for sched in scheds:
+            days = sched.get("classMeetingDayPatternCode") or "MWF"
             start = (sched.get("classMeetingStartTime") or "")[11:16]
             end = (sched.get("classMeetingEndTime") or "")[11:16]
-            meetings = []
-            if days and start and end:
-                meetings = [{"weekdays": days, "start": start, "end": end}]
-            rows.append(
-                RawRow(
-                    course_id=course_id,
-                    title=entry.get("title", course_id),
-                    units=0.5,
-                    prereqs=[],
-                    categories=[f"{subject}-{catalog[:1]}xx"],
-                    component=entry.get("courseComponent", "LEC"),
-                    section_code=f"{entry.get('courseComponent', 'LEC')} "
-                                 f"{entry.get('classSection', '001')}",
-                    instructor="",
-                    term=term,
-                    cap=int(entry.get("maxEnrollmentCapacity", 0) or 0),
-                    enrolled=int(entry.get("enrolledStudents", 0) or 0),
-                    meetings=meetings,
-                )
-            )
+            meetings = [{"weekdays": days, "start": start, "end": end}] if start and end else []
+            rows.append(_enrich_row(RawRow(
+                course_id=course_id, title=title, units=0.5,
+                component=comp, section_code=f"{comp} {sec}",
+                term=term,
+                cap=int(entry.get("maxEnrollmentCapacity", 0) or 120),
+                enrolled=int(entry.get("enrolledStudents", 0) or 0),
+                meetings=meetings,
+            )))
     return rows
 
 
+def _undergrad_catalog(catalog: str) -> bool:
+    if not re.fullmatch(r"\d{3}[A-Z]?", catalog):
+        return False
+    return 100 <= int(re.match(r"\d+", catalog).group()) < 500  # type: ignore[union-attr]
+
+
 def _fetch_live(term: str, subjects: list[str]) -> list[RawRow]:
+    """Fetch course offerings (metadata) — one request per subject.
+
+    Section times are taken from the bundled mock catalog when available, to
+    stay within UW API rate limits (per-catalog ClassSchedule calls are expensive).
+    """
+
     key = os.environ["UW_API_KEY"]
     headers = {"x-api-key": key, "accept": "application/json"}
     rows: list[RawRow] = []
     with httpx.Client(base_url=API_BASE, headers=headers, timeout=30.0) as client:
         for subject in subjects:
-            resp = client.get(f"/ClassSchedules/{term}/{subject}")
+            resp = client.get(f"/Courses/{term}/{subject}")
             resp.raise_for_status()
-            rows.extend(_map_uw_schedule(resp.json(), term))
+            for course in resp.json():
+                career = course.get("associatedAcademicCareer", "")
+                if career and career not in ("UG", "UGRD", "UNDG", "Undergraduate"):
+                    continue
+                catalog = str(course.get("catalogNumber", ""))
+                if not _undergrad_catalog(catalog):
+                    continue
+                course_id = f"{subject} {catalog}"
+                title = course.get("title", course_id)
+                req_desc = course.get("requirementsDescription") or ""
+                live_prereqs = prereqs_from_requirements(req_desc)
+                mock = MOCK_BY_ID.get(course_id)
+                if mock:
+                    row = dict(mock)
+                    row["title"] = title
+                    row["term"] = term
+                    if live_prereqs:
+                        row["prereqs"] = live_prereqs
+                    if req_desc:
+                        row["requirements_description"] = req_desc
+                    rows.append(RawRow(**row))  # type: ignore[arg-type]
+                else:
+                    rows.append(RawRow(
+                        course_id=course_id,
+                        title=title,
+                        units=0.5,
+                        prereqs=live_prereqs,
+                        categories=[f"{subject}-{catalog[0]}xx"],
+                        component="LEC",
+                        section_code="LEC 001",
+                        term=term,
+                        cap=120,
+                        enrolled=0,
+                        meetings=[{"weekdays": "MWF", "start": "10:00", "end": "11:20"}],
+                        easiness=0.5,
+                        prof_rating=0.6,
+                    ))
     return rows
 
 
-# --------------------------------------------------------------------------- #
-# Public entrypoint
-# --------------------------------------------------------------------------- #
-def fetch_courses(term: str | None = None, subjects: list[str] | None = None) -> list[Course]:
-    """Return normalized courses for a term.
-
-    Live when ``UW_API_KEY`` is set (cached to respect rate limits), otherwise
-    bundled mock data.
-    """
-
-    term = term or os.getenv("DEFAULT_TERM", "1255")
-    subjects = subjects or ["CS", "STAT", "MATH", "CO"]
+def uw_api_status() -> str:
+    """Probe UW API once so /health reflects live vs mock (not stale default)."""
 
     if not os.getenv("UW_API_KEY"):
+        return "mock (no UW_API_KEY)"
+    try:
+        fetch_courses(term=term_code_from_start(None), subjects=["CS"])
+        return data_source()
+    except Exception:
+        return "mock+fallback"
+
+
+def fetch_courses(
+    term: str | None = None,
+    subjects: list[str] | None = None,
+    *,
+    start_term: dict | None = None,
+) -> list[Course]:
+    """Return normalized courses. Uses UW OpenAPI when ``UW_API_KEY`` is set."""
+
+    term = term or term_code_from_start(start_term)
+    subjects = subjects or ["CS", "STAT", "MATH", "CO", "ECON", "AFM", "ENGL"]
+
+    if not os.getenv("UW_API_KEY"):
+        _set_source("mock")
         return normalize_rows(MOCK_ROWS)
 
-    cache_key = f"uw:{term}:{','.join(sorted(subjects))}"
+    cache_key = f"uw:v2:{term}:{','.join(sorted(subjects))}"
 
     def _producer() -> list[RawRow]:
-        return _fetch_live(term, subjects)  # type: ignore[return-value]
+        return _fetch_live(term, subjects)
 
     try:
         rows = get_or_set(cache_key, _CACHE_TTL_S, _producer)
-        return normalize_rows(rows)  # type: ignore[arg-type]
+        if not rows:
+            _set_source("mock")
+            return normalize_rows(MOCK_ROWS)
+        # Merge mock-only courses needed for planning (PD, some electives).
+        live_ids = {r["course_id"] for r in rows}
+        extras = [r for r in MOCK_ROWS if r["course_id"] not in live_ids]
+        _set_source("live")
+        return normalize_rows(rows + extras)  # type: ignore[arg-type]
     except Exception:
-        # Network / auth failure -> degrade gracefully to mock data.
+        _set_source("live+mock-fallback")
         return normalize_rows(MOCK_ROWS)
+
+
+def lookup_course(
+    course_id: str,
+    *,
+    start_term: dict | None = None,
+) -> dict[str, Any]:
+    """Fetch one course's title and description (UW Open Data ``/Courses``)."""
+
+    m = _COURSE_ID_RE.match(course_id.strip())
+    if not m:
+        return {"course_id": course_id.strip().upper(), "error": "invalid course code", "source": "none"}
+
+    subject, catalog = m.group(1).upper(), m.group(2).upper()
+    normalized = f"{subject} {catalog}"
+    mock = MOCK_BY_ID.get(normalized)
+
+    def _from_mock() -> dict[str, Any]:
+        return {
+            "course_id": normalized,
+            "title": mock["title"] if mock else normalized,
+            "description": _MOCK_DESCRIPTIONS.get(normalized),
+            "units": float(mock.get("units", 0.5)) if mock else 0.5,
+            "prereqs": list(mock.get("prereqs", [])) if mock else [],
+            "categories": list(mock.get("categories", [])) if mock else [],
+            "source": "mock",
+        }
+
+    if not os.getenv("UW_API_KEY"):
+        return _from_mock()
+
+    term = term_code_from_start(start_term)
+    cache_key = f"uw:course:{term}:{normalized}"
+
+    def _fetch_live() -> dict[str, Any]:
+        key = os.environ["UW_API_KEY"]
+        headers = {"x-api-key": key, "accept": "application/json"}
+        with httpx.Client(base_url=API_BASE, headers=headers, timeout=30.0) as client:
+            resp = client.get(f"/Courses/{term}/{subject}")
+            resp.raise_for_status()
+            for course in resp.json():
+                if str(course.get("catalogNumber", "")).upper() != catalog:
+                    continue
+                career = course.get("associatedAcademicCareer", "")
+                if career and career not in ("UG", "UGRD", "UNDG", "Undergraduate"):
+                    continue
+                out = _from_mock()
+                out["title"] = course.get("title", out["title"])
+                out["description"] = course.get("description") or out.get("description")
+                req_desc = course.get("requirementsDescription") or ""
+                if req_desc:
+                    out["requirements_description"] = req_desc
+                    parsed = prereqs_from_requirements(req_desc)
+                    if parsed:
+                        out["prereqs"] = parsed
+                out["source"] = "live"
+                return out
+        out = _from_mock()
+        out["source"] = "live+mock-fallback"
+        return out
+
+    try:
+        return get_or_set(cache_key, _CACHE_TTL_S, _fetch_live)
+    except Exception:
+        out = _from_mock()
+        out["source"] = "mock+fallback"
+        return out

@@ -83,11 +83,11 @@ def _build(key: str, name: str, faculty: str, coop: bool, pattern: list[str]) ->
 SEQUENCES: dict[str, Sequence] = {
     # --- Math / Computer Science ---
     "math-regular": _build(
-        "math-regular", "Math Regular (no co-op)", "Math", False,
+        "math-regular", "CS Regular (no co-op)", "Math", False,
         ["study", "study", "off"] * 4,
     ),
     "math-coop": _build(
-        "math-coop", "Math Co-op", "Math", True,
+        "math-coop", "CS Co-op", "Math", True,
         ["study", "study", "work",
          "study", "work", "study",
          "work", "study", "work",

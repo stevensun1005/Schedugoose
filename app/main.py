@@ -44,6 +44,8 @@ _INDEX_HTML = """<!doctype html>
   header { padding:16px 24px; border-bottom:1px solid #23262e; display:flex; align-items:center; gap:10px; }
   header h1 { font-size:18px; margin:0; font-weight:600; }
   header .tag { font-size:12px; color:var(--muted); }
+  header .llm-ok { color:#6dd58c; }
+  header .llm-off { color:#f28b82; }
   #chat { flex:1; overflow-y:auto; padding:24px; display:flex; flex-direction:column; gap:14px; max-width:860px; width:100%; margin:0 auto; }
   .msg { padding:12px 16px; border-radius:14px; max-width:80%; line-height:1.5; white-space:pre-wrap; }
   .user { align-self:flex-end; background:#2a3340; }
@@ -61,13 +63,22 @@ _INDEX_HTML = """<!doctype html>
   input { flex:1; padding:12px 14px; border-radius:10px; border:1px solid #2a2e37; background:#0c0e12; color:var(--text); font-size:14px; }
   button { padding:12px 18px; border-radius:10px; border:none; background:var(--accent); color:#1a1a1a; font-weight:600; cursor:pointer; }
   button:disabled { opacity:.5; cursor:default; }
+  .ai-badge { margin-top:10px; font-size:11px; display:inline-flex; gap:6px; align-items:center;
+              padding:4px 9px; border-radius:8px; line-height:1.3; }
+  .ai-badge .dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+  .ai-badge.full { background:#152218; color:#6dd58c; border:1px solid #2d4a38; }
+  .ai-badge.full .dot { background:#6dd58c; }
+  .ai-badge.partial { background:#221f14; color:#e8c547; border:1px solid #3d3820; }
+  .ai-badge.partial .dot { background:#e8c547; }
+  .ai-badge.rules { background:#221518; color:#f28b82; border:1px solid #4a2d35; }
+  .ai-badge.rules .dot { background:#f28b82; }
 </style>
 </head>
 <body>
 <header>
   <span style="font-size:22px">&#129446;</span>
   <h1>Schedugoose</h1>
-  <span class="tag">LLM + OR-Tools course planner</span>
+  <span class="tag" id="llm-status">checking LLM...</span>
 </header>
 <div id="chat"></div>
 <form id="f">
@@ -76,7 +87,7 @@ _INDEX_HTML = """<!doctype html>
   <button id="send" type="submit">Plan</button>
 </form>
 <script>
-let sessionId = null;
+let sessionId = localStorage.getItem('schedugoose_session');
 const chat = document.getElementById('chat');
 const form = document.getElementById('f');
 const input = document.getElementById('m');
@@ -117,6 +128,41 @@ function renderPlan(bubbleEl, plan) {
   bubbleEl.appendChild(box);
 }
 
+function renderAiBadge(bubbleEl, data) {
+  const understood = !!data.llm_understood;
+  const explained = !!data.llm_explained;
+  const configured = !!data.llm_configured;
+  const parseFailed = !!data.llm_parse_failed;
+  const offline = !!data.llm_offline;
+
+  let cls = 'rules';
+  let label = 'Rules only — no Groq this turn';
+  if (!configured) {
+    cls = 'rules';
+    label = 'No GROQ_API_KEY loaded — restart server after editing .env';
+  } else if (parseFailed || offline) {
+    cls = 'rules';
+    label = 'Groq could not parse this turn — rules + template (quota or model)';
+  } else if (understood && explained) {
+    cls = 'full';
+    label = 'AI understood your message and wrote this reply';
+  } else if (understood) {
+    cls = 'partial';
+    label = 'AI understood your message · reply text is template (quota fallback)';
+  } else if (explained) {
+    cls = 'partial';
+    label = 'AI wrote this reply · intent parsed with rules';
+  } else if (data.used_llm) {
+    cls = 'full';
+    label = 'AI used this turn';
+  }
+
+  const badge = document.createElement('div');
+  badge.className = 'ai-badge ' + cls;
+  badge.innerHTML = '<span class="dot"></span><span>' + label + '</span>';
+  bubbleEl.appendChild(badge);
+}
+
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = input.value.trim();
@@ -124,7 +170,7 @@ form.addEventListener('submit', async (e) => {
   bubble(text, 'user');
   input.value = '';
   btn.disabled = true;
-  const thinking = bubble('Planning...', 'bot');
+  const thinking = bubble('...', 'bot');
   try {
     const res = await fetch('/plan', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -132,7 +178,9 @@ form.addEventListener('submit', async (e) => {
     });
     const data = await res.json();
     sessionId = data.session_id;
+    localStorage.setItem('schedugoose_session', sessionId);
     thinking.textContent = data.explanation;
+    renderAiBadge(thinking, data);
     renderPlan(thinking, data.plan);
   } catch (err) {
     thinking.textContent = 'Error: ' + err;
@@ -142,10 +190,21 @@ form.addEventListener('submit', async (e) => {
   }
 });
 
-bubble("Hi! I'll plan your courses term-by-term across your whole co-op "
-     + "sequence. To start, tell me your program (for example: I am a "
-     + "first-year CS student) and what you're aiming for. I'll then ask about "
-     + "your sequence and start term, and build the plan from 1A onward.", 'bot');
+bubble("Hey! I'm Schedugoose — I help UW students plan courses term-by-term across co-op. "
+     + "Tell me about yourself in plain language (program, goals, preferences) and we'll go from there.", 'bot');
+
+fetch('/health').then(r => r.json()).then(h => {
+  const el = document.getElementById('llm-status');
+  if (h.llm) {
+    el.textContent = 'LLM: ' + h.llm_mode + ' | UW data: ' + (h.uw_data_source || '?');
+    el.className = 'tag llm-ok';
+  } else {
+    el.textContent = 'LLM offline — add GROQ_API_KEY to .env (free at console.groq.com)';
+    el.className = 'tag llm-off';
+  }
+}).catch(() => {
+  document.getElementById('llm-status').textContent = 'LLM status unknown';
+});
 </script>
 </body>
 </html>"""

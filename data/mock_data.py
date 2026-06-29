@@ -69,6 +69,11 @@ MOCK_ROWS: list[RawRow] = [
     _one("ENGL 119", "Communications in Math & CS", 9, categories=["Comm", "Elective"], easiness=0.85),
     _one("ANTH 100", "Introduction to Anthropology", 11, categories=["Elective"], easiness=0.88),
     _one("GEOG 101", "Introduction to Physical Geography", 12, categories=["Elective"], easiness=0.82),
+    _one("FREN 101", "Introduction to French Language 1", 13, categories=["Language", "Elective"], easiness=0.75),
+    _one("GER 101", "Elementary German 1", 14, categories=["Language", "Elective"], easiness=0.75),
+    _one("SPAN 101", "Introduction to Spanish 1", 15, categories=["Language", "Elective"], easiness=0.75),
+    _one("ENGL 129", "Written Academic English", 4, categories=["Intl-English", "Comm", "Elective"], easiness=0.78),
+    _one("ELL 102", "English Language Learning 2", 6, categories=["Intl-English", "Elective"], easiness=0.8),
 
     # ---- 1B ----
     _one("CS 136", "Elementary Algorithm Design", 2, prereqs=["CS 135"], categories=["CS-Core", "CS-1xx"]),
@@ -82,6 +87,7 @@ MOCK_ROWS: list[RawRow] = [
     _one("CS 246", "Object-Oriented Software Development", 0, prereqs=["CS 136"], categories=["CS-Core", "CS-2xx"]),
     _one("CS 245", "Logic and Computation", 2, prereqs=["CS 136"], categories=["CS-Core", "CS-2xx", "CS-Theory"]),
     _one("MATH 239", "Introduction to Combinatorics", 8, prereqs=["MATH 136"], categories=["Math-Core", "MATH-2xx"]),
+    _one("MATH 237", "Calculus 3 for Honours Math", 6, prereqs=["MATH 138"], categories=["Math-Core", "MATH-2xx"]),
     _one("STAT 230", "Probability", 4, prereqs=["MATH 138"], categories=["Math-Core", "STAT-Core", "STAT-2xx"]),
     _one("PHIL 145", "Critical Thinking", 5, categories=["Elective"], easiness=0.85),
     _one("RS 110", "Religions of the West", 14, categories=["Elective"], easiness=0.86),
@@ -123,6 +129,11 @@ MOCK_ROWS: list[RawRow] = [
     _one("CO 487", "Applied Cryptography", 5, prereqs=["MATH 135"], categories=["CS-Security", "CS-4xx"]),
     _one("CS 484", "Computational Vision", 14, prereqs=["CS 480"], categories=["CS-AI", "CS-4xx"]),
     _one("CS 497", "Independent Study", 15, prereqs=["CS 341"], categories=["CS-4xx", "Elective"], easiness=0.7),
+    _one("CS 454", "Distributed Systems", 0, prereqs=["CS 350", "CS 348"], categories=["CS-4xx", "CS-Systems"]),
+    _one("CS 459", "Privacy, Cryptography, Security", 1, prereqs=["CS 350"], categories=["CS-4xx", "CS-Security"]),
+    _one("STAT 332", "Applied Linear Models", 2, prereqs=["STAT 231"], categories=["STAT-Core", "STAT-3xx"]),
+    _one("MATH 235", "Linear Algebra 2", 3, prereqs=["MATH 136"], categories=["Math-Core", "MATH-2xx"]),
+    _one("ENGL 210", "Technical Writing", 4, categories=["Comm", "Elective"], easiness=0.82),
 ]
 
 # CS 486 tutorial

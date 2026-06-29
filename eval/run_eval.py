@@ -19,9 +19,10 @@ from typing import Any
 from agent.graph import run_turn
 from agent.state import PlannerState
 from eval.checker import verify_plan
+from eval.judge import llm_judge_faithful, rule_based_faithful
 
 _CASES = Path(__file__).with_name("test_cases.jsonl")
-_COURSE_RE = re.compile(r"\b[A-Z]{2,4}\s?[0-9]{3}[A-Za-z]?\b")
+_COURSE_RE = re.compile(r"\b[A-Z]{2,5}\s?[0-9]{3}[A-Za-z]?\b")
 _HIGH, _LOW = 0.4, 0.2
 
 
@@ -44,6 +45,52 @@ def _check_intent(state: PlannerState, expect: dict[str, Any]) -> tuple[int, int
     if "faculty" in expect:
         total += 1
         passed += int(intake.get("faculty") == expect["faculty"])
+    if "program" in expect:
+        total += 1
+        passed += int(intake.get("program") == expect["program"])
+    if "residency" in expect:
+        total += 1
+        passed += int(intake.get("residency") == expect["residency"])
+    if "degree_kind" in expect:
+        total += 1
+        dp = intake.get("degree_plan") or {}
+        passed += int(dp.get("kind") == expect["degree_kind"])
+    return passed, total
+
+
+def _check_plan_rules(plan: dict[str, Any], expect: dict[str, Any]) -> tuple[int, int]:
+    passed = total = 0
+    if expect.get("no_cs492_early"):
+        total += 1
+        bad = any(
+            "CS 492" in t.get("courses", [])
+            for t in plan.get("terms", [])
+            if t.get("kind") == "study" and t.get("label", "")[0] in ("1", "2")
+        )
+        passed += int(not bad)
+    if expect.get("no_pd_in_study"):
+        total += 1
+        bad = any(
+            any(c.startswith("PD") for c in t.get("courses", []))
+            for t in plan.get("terms", [])
+            if t.get("kind") == "study"
+        )
+        passed += int(not bad)
+    if expect.get("has_language_1a"):
+        total += 1
+        one_a = next((t for t in plan.get("terms", []) if t.get("label") == "1A"), {})
+        langs = {"FREN 101", "GER 101", "SPAN 101"}
+        passed += int(bool(set(one_a.get("courses", [])) & langs))
+    if expect.get("has_intl_english_1a"):
+        total += 1
+        one_a = next((t for t in plan.get("terms", []) if t.get("label") == "1A"), {})
+        intl = {"ENGL 129", "ELL 102"}
+        passed += int(bool(set(one_a.get("courses", [])) & intl))
+    if expect.get("no_language_1a"):
+        total += 1
+        one_a = next((t for t in plan.get("terms", []) if t.get("label") == "1A"), {})
+        langs = {"FREN 101", "GER 101", "SPAN 101"}
+        passed += int(not (set(one_a.get("courses", [])) & langs))
     return passed, total
 
 
@@ -55,12 +102,8 @@ def _collect_courses(plan: dict[str, Any]) -> set[str]:
 
 
 def _check_explanation(text: str, plan: dict[str, Any] | None) -> bool:
-    mentioned = set(_COURSE_RE.findall(text))
-    if not mentioned or not plan:
-        return True
-    norm = lambda s: re.sub(r"\s+", " ", s).strip()
-    allowed = {norm(c) for c in _collect_courses(plan)}
-    return all(norm(m) in allowed for m in mentioned)
+    ok, _ = llm_judge_faithful(text, plan)
+    return ok
 
 
 def run() -> int:
@@ -111,6 +154,12 @@ def run() -> int:
         p, t = _check_intent(state, expect)
         intent_pass += p
         intent_total += t
+
+        if plan:
+            p2, t2 = _check_plan_rules(plan, expect)
+            intent_pass += p2
+            intent_total += t2
+            case_ok &= (p2 == t2) if t2 else True
 
         expl_total += 1
         ok = _check_explanation(state.get("explanation", ""), plan)

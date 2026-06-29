@@ -14,18 +14,38 @@ class Profile(TypedDict, total=False):
 
 
 class PlannerState(TypedDict, total=False):
-    messages: list[dict[str, str]]   # [{"role": ..., "content": ...}]
+    messages: list[dict[str, str]]
     profile: Profile
-    intake: dict[str, Any]           # onboarding: program/sequence/start_term/career
+    intake: dict[str, Any]
     career_goal: str
-    config: dict[str, Any] | None    # LLM-produced solver config (README JSON shape)
-    candidates: list[Course]         # pre-filtered, relevance-scored courses
-    schedule: dict[str, Any] | None  # ScheduleResult.as_dict() (single-term)
-    plan: dict[str, Any] | None      # multi-term sequence plan
+    config: dict[str, Any] | None
+    # OR pipeline (Phase 2 LangGraph nodes)
+    catalog: list[Course]
+    candidates: list[Course]
+    conflicts: list[tuple[str, str]]
+    model_ready: bool
+    current_term: str
+    schedule: dict[str, Any] | None
+    plan: dict[str, Any] | None
+    infeasible: bool
+    diagnosis: list[str]
+    last_solve_status: str
+    # RAG + agent trace (resume-visible)
+    rag_hits: list[dict[str, Any]]
+    grounded_codes: list[str]
+    graph_trace: list[str]
+    understanding: dict[str, Any] | None
+    turn_revision: dict[str, Any] | None
+    # Dialogue
     needs_clarification: bool
-    clarification: str               # question to ask the user
-    explanation: str                 # natural-language narration
-    used_llm: bool                   # whether a real LLM was used this turn
+    # True when this turn answers a pending onboarding question (so a bare
+    # course code is treated as an answer, not a course lookup).
+    answering_onboarding: bool
+    clarification: str
+    explanation: str
+    used_llm: bool
+    llm_understood: bool
+    llm_explained: bool
 
 
 def last_user_message(state: PlannerState) -> str:

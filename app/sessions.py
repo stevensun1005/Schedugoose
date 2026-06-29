@@ -46,7 +46,7 @@ def load(session_id: str) -> PlannerState:
 
 def save(session_id: str, state: PlannerState) -> None:
     # Persist only JSON-serializable fields (drop live Course objects).
-    persist = {k: v for k, v in state.items() if k != "candidates"}
+    persist = {k: v for k, v in state.items() if k not in ("candidates", "catalog", "conflicts")}
     raw = json.dumps(persist, default=str)
     client = _redis()
     if client is not None:

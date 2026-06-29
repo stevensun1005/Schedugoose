@@ -16,11 +16,14 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from agent.llm import complete_json
+from agent.config_schema import SolverConfigOutput
+from agent.llm import complete_structured
+from data.course_codes import course_ids_for_subject
+from data.degree_plans import DOMESTIC_LANGUAGE_CATEGORY, INTL_ENGLISH_CATEGORY, parse_residency
 from data.program_reqs import get_program_reqs
 
 # Course-code matcher, e.g. "cs486", "CS 486", "stat 341".
-_COURSE_RE = re.compile(r"\b([A-Za-z]{2,4})\s?([0-9]{3}[A-Za-z]?)\b")
+_COURSE_RE = re.compile(r"\b([A-Za-z]{2,5})\s?([0-9]{3}[A-Za-z]?)\b")
 
 _DEFAULT_WEIGHTS = {"career": 0.5, "easy": 0.3, "prof": 0.2, "morning": 0.0, "friday": 0.0}
 
@@ -105,6 +108,154 @@ def _wants_easy_course(text: str) -> int:
     return 0
 
 
+def _parse_term_requirements(text: str, prev: dict[str, Any] | None) -> dict[str, list[str]]:
+    """Per-term constraints, e.g. CS 245 + CS 246 in 2A."""
+
+    low = text.lower()
+    term_reqs: dict[str, list[str]] = dict((prev or {}).get("term_requirements") or {})
+
+    def _add(slot: str, code: str) -> None:
+        slot = slot.upper()
+        code = normalize_course_code(code)
+        term_reqs.setdefault(slot, [])
+        if code not in term_reqs[slot]:
+            term_reqs[slot].append(code)
+
+    first_term = any(k in low for k in (
+        "first term", "1a", "first year", "fall term", "my first semester",
+    ))
+    intl_english = any(k in low for k in (
+        "engl 129", "ell", "esl", "english proficiency", "academic english",
+        "english language learner", "written english",
+    ))
+    second_language = any(k in low for k in (
+        "french", "german", "spanish", "mandarin", "chinese", "second language",
+        "learn a language",
+    ))
+    generic_language = "language course" in low or (
+        "language" in low and not intl_english and not second_language
+    )
+
+    if (intl_english or second_language or generic_language) and (
+        first_term or "1a" not in term_reqs
+    ):
+        term_reqs.setdefault("1A", [])
+        residency = parse_residency(text)
+        if intl_english or residency == "international":
+            cat = INTL_ENGLISH_CATEGORY
+        elif second_language or residency == "domestic":
+            cat = DOMESTIC_LANGUAGE_CATEGORY
+        else:
+            cat = DOMESTIC_LANGUAGE_CATEGORY
+        if cat not in term_reqs["1A"]:
+            term_reqs["1A"] = [
+                x for x in term_reqs["1A"]
+                if x not in (DOMESTIC_LANGUAGE_CATEGORY, INTL_ENGLISH_CATEGORY, "Language")
+            ]
+            term_reqs["1A"].append(cat)
+
+    # Per-course: "CS 245 in 2A"
+    for m in re.finditer(
+        r"([A-Za-z]{2,4}\s?[0-9]{3}[A-Za-z]?)\s+(?:in|for)\s+(1[AB]|2[AB]|3[AB]|4[AB])",
+        low,
+    ):
+        _add(m.group(2), m.group(1))
+
+    # Shared term: "cs245 and 246 in 2a", "take CS 245, CS 246 for 2A"
+    slot_match = re.search(r"\b(?:in|for)\s+(1[AB]|2[AB]|3[AB]|4[AB])\b", text, re.I)
+    if slot_match:
+        slot = slot_match.group(1).upper()
+        chunk = text[: slot_match.start()]
+        subject = "CS"
+        if re.search(r"\bcs\b", chunk, re.I):
+            subject = "CS"
+        elif re.search(r"\bmath\b", chunk, re.I):
+            subject = "MATH"
+        elif re.search(r"\bstat\b", chunk, re.I):
+            subject = "STAT"
+        for part in re.split(r"\band\b|,", chunk, flags=re.I):
+            part = part.strip()
+            if not part:
+                continue
+            full = _COURSE_RE.search(part)
+            if full:
+                _add(slot, f"{full.group(1)} {full.group(2)}")
+                subject = full.group(1).upper()
+                continue
+            bare = re.search(r"\b(\d{3}[A-Za-z]?)\b", part)
+            if bare:
+                _add(slot, f"{subject} {bare.group(1).upper()}")
+
+    return term_reqs
+
+
+def _parse_term_avoid(text: str, prev: dict[str, Any] | None) -> dict[str, list[str]]:
+    """Per-term exclusions, e.g. don't take CS 240 in 2A."""
+
+    low = text.lower()
+    term_avoid: dict[str, list[str]] = dict((prev or {}).get("term_avoid") or {})
+
+    def _avoid(slot: str, code: str) -> None:
+        slot = slot.upper()
+        code = normalize_course_code(code)
+        term_avoid.setdefault(slot, [])
+        if code not in term_avoid[slot]:
+            term_avoid[slot].append(code)
+
+    for m in re.finditer(
+        r"(?:don'?t|do not|not)\s+want(?:\s+to\s+take)?\s+([a-z]{2,4}\s?\d{3}[a-z]?)\s+in\s+(1[ab]|2[ab]|3[ab]|4[ab])",
+        low,
+    ):
+        _avoid(m.group(2), m.group(1))
+
+    for m in re.finditer(
+        r"(?:no|avoid|skip|drop|without)\s+([a-z]{2,4}\s?\d{3}[a-z]?)\s+in\s+(1[ab]|2[ab]|3[ab]|4[ab])",
+        low,
+    ):
+        _avoid(m.group(2), m.group(1))
+
+    # Subject-only: "don't want engl in 2a" (no catalog number)
+    for m in re.finditer(
+        r"(?:don'?t|do not|not)\s+want(?:\s+to\s+take)?\s+([a-z]{2,5})\s+in\s+(1[ab]|2[ab]|3[ab]|4[ab])\b",
+        low,
+    ):
+        subj = m.group(1).upper()
+        if re.fullmatch(r"\d{3}", subj):
+            continue
+        slot = m.group(2).upper()
+        for cid in course_ids_for_subject(subj):
+            _avoid(slot, cid)
+
+    return term_avoid
+
+
+def _parse_term_replacements(text: str, term_reqs: dict[str, list[str]]) -> dict[str, list[str]]:
+    """'want MATH 237 instead' → pin to the term mentioned earlier in the message."""
+
+    low = text.lower()
+    if "instead" not in low:
+        return term_reqs
+
+    slots = re.findall(r"\b(1[AB]|2[AB]|3[AB]|4[AB])\b", text, re.I)
+    slot = slots[-1].upper() if slots else None
+    if not slot:
+        return term_reqs
+
+    def _add(code: str) -> None:
+        code = normalize_course_code(code)
+        term_reqs.setdefault(slot, [])
+        if code not in term_reqs[slot]:
+            term_reqs[slot].append(code)
+
+    inst = re.search(
+        r"want(?:\s+to\s+take)?\s+([a-z]{2,4}\s?\d{3}[a-z]?)\s+instead",
+        text,
+        re.I,
+    )
+    if inst:
+        _add(inst.group(1))
+    return term_reqs
+
 def _apply_time_prefs(text: str) -> tuple[dict[str, Any], float, float]:
     time_prefs: dict[str, Any] = {}
     morning_w = 0.0
@@ -124,6 +275,20 @@ def _apply_time_prefs(text: str) -> tuple[dict[str, Any], float, float]:
         time_prefs["avoid_friday"] = True
         friday_w = 0.4
     return time_prefs, morning_w, friday_w
+
+
+def _apply_subject_avoid(low: str, must_avoid: list[str]) -> None:
+    """Map 'no music' style phrasing to concrete course codes in the mock catalog."""
+
+    subject_rules: list[tuple[str, list[str]]] = [
+        (r"don'?t want (?:to )?(?:learn |take |study |do )?music|no music|not music|without music", ["MUSIC 116"]),
+        (r"don'?t want (?:to )?(?:learn |take |study )?anthropology|no anthro", ["ANTH 100"]),
+    ]
+    for pattern, codes in subject_rules:
+        if re.search(pattern, low):
+            for code in codes:
+                if code not in must_avoid:
+                    must_avoid.append(code)
 
 
 def rule_based_config(text: str, program: str, prev: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -150,12 +315,23 @@ def rule_based_config(text: str, program: str, prev: dict[str, Any] | None = Non
     for code in avoid_codes:
         if code not in must_avoid:
             must_avoid.append(code)
+    _apply_subject_avoid(low, must_avoid)
     if include_trigger:
         for code in extract_course_codes(text):
             if code not in avoid_codes and code not in must_include:
                 must_include.append(code)
 
     min_easy = max(int((prev or {}).get("min_easy_courses", 0)), _wants_easy_course(low))
+    term_requirements = _parse_term_requirements(text, prev)
+    term_requirements = _parse_term_replacements(text, term_requirements)
+    term_avoid = _parse_term_avoid(text, prev)
+
+    # Drop avoided courses from pins in the same term.
+    for slot, avoid in term_avoid.items():
+        if slot in term_requirements:
+            term_requirements[slot] = [
+                c for c in term_requirements[slot] if c not in avoid
+            ]
 
     return {
         "target_categories": list((prev or {}).get("target_categories", [])),
@@ -166,6 +342,8 @@ def rule_based_config(text: str, program: str, prev: dict[str, Any] | None = Non
         "must_avoid": must_avoid,
         "program_reqs": (prev or {}).get("program_reqs") or get_program_reqs(program),
         "min_easy_courses": min_easy,
+        "term_requirements": term_requirements,
+        "term_avoid": term_avoid,
     }
 
 
@@ -173,28 +351,75 @@ def rule_based_config(text: str, program: str, prev: dict[str, Any] | None = Non
 # Public entrypoint (LLM with rule-based fallback)
 # --------------------------------------------------------------------------- #
 _SYSTEM = """You translate a student's natural-language course-planning request \
-into a JSON solver config. You never invent course codes. Output keys: \
-target_categories (list of strings), credit_load ({min,max} floats), \
-weights ({career,easy,prof,morning,friday} floats 0-1), \
-time_prefs ({avoid_before "HH:MM", avoid_friday bool}), \
-must_include (list of course codes), must_avoid (list of course codes). \
-Map vague phrasing: "keep it light" -> easy~0.5; "I want a challenge" -> \
-career~0.6, easy~0.1; "no early classes" -> morning~0.5 and avoid_before 10:00."""
+into a structured solver config. You never invent course codes — only categories, \
+weights, and preferences. Map vague phrasing: "keep it light" -> easy~0.5; \
+"I want a challenge" -> career~0.6, easy~0.1; "no early classes" -> morning~0.5 \
+and avoid_before "10:00"."""
 
 
-def to_config(text: str, program: str, prev: dict[str, Any] | None = None) -> tuple[dict[str, Any], bool]:
-    """Return (config, used_llm). Falls back to rules when the LLM is unavailable."""
+def to_config(
+    text: str,
+    program: str,
+    prev: dict[str, Any] | None = None,
+    *,
+    understanding: Any | None = None,
+) -> tuple[dict[str, Any], bool]:
+    """Return (config, used_llm). LLM understanding preferred; rules when offline."""
+
+    from agent.intent_schema import TurnUnderstanding
 
     fallback = rule_based_config(text, program, prev)
-    llm = complete_json(_SYSTEM, f"Program: {program}\nPrevious config: {prev}\nRequest: {text}")
-    if not llm:
+    reqs = (prev or {}).get("program_reqs") or get_program_reqs(program)
+
+    if isinstance(understanding, TurnUnderstanding):
+        merged = dict(fallback)
+        llm_dict = understanding.solver.to_solver_dict(program_reqs=reqs)
+        for key in ("target_categories", "credit_load", "weights", "time_prefs", "min_easy_courses"):
+            if key in llm_dict:
+                merged[key] = llm_dict[key]
+        for key in ("must_include", "must_avoid"):
+            if llm_dict.get(key):
+                merged[key] = list(dict.fromkeys((merged.get(key) or []) + llm_dict[key]))
+        if understanding.term_requirements:
+            tr = dict(merged.get("term_requirements") or {})
+            for slot, codes in understanding.term_requirements.items():
+                tr.setdefault(slot.upper(), [])
+                for code in codes:
+                    norm = normalize_course_code(code)
+                    if norm not in tr[slot.upper()]:
+                        tr[slot.upper()].append(norm)
+            merged["term_requirements"] = tr
+        if understanding.term_avoid:
+            ta = dict(merged.get("term_avoid") or {})
+            for slot, codes in understanding.term_avoid.items():
+                ta.setdefault(slot.upper(), [])
+                for code in codes:
+                    norm = normalize_course_code(code)
+                    if norm not in ta[slot.upper()]:
+                        ta[slot.upper()].append(norm)
+            merged["term_avoid"] = ta
+            tr = dict(merged.get("term_requirements") or {})
+            for slot, avoid in ta.items():
+                if slot in tr:
+                    tr[slot] = [c for c in tr[slot] if c not in avoid]
+            merged["term_requirements"] = tr
+        return merged, True
+
+    structured = complete_structured(
+        _SYSTEM,
+        f"Program: {program}\nPrevious config: {prev}\nRequest: {text}",
+        SolverConfigOutput,
+    )
+    if structured is None:
         return fallback, False
-    # Merge: trust LLM for translation fields, keep program reqs grounded.
     merged = dict(fallback)
-    for key in ("target_categories", "credit_load", "weights", "time_prefs",
-                "must_include", "must_avoid", "min_easy_courses"):
-        if key in llm:
-            merged[key] = llm[key]
+    llm_dict = structured.to_solver_dict(program_reqs=reqs)
+    for key in ("target_categories", "credit_load", "weights", "time_prefs", "min_easy_courses"):
+        if key in llm_dict:
+            merged[key] = llm_dict[key]
+    for key in ("must_include", "must_avoid"):
+        if key in llm_dict and llm_dict[key]:
+            merged[key] = list(dict.fromkeys((merged.get(key) or []) + llm_dict[key]))
     return merged, True
 
 
