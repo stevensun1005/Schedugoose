@@ -17,7 +17,7 @@ from agent.intake import (
 )
 from agent.llm import llm_available
 from agent.revision import revision_delta
-from agent.semantic import to_config
+from agent.semantic import extract_course_codes, to_config
 from agent.state import PlannerState, last_user_message
 from agent.understand import apply_understanding, understand_turn
 
@@ -102,7 +102,14 @@ def gather_constraints(state: PlannerState) -> dict[str, Any]:
         entering = parse_entering_term(text)
         if entering:
             intake["entering_term"] = entering
-            intake["standing"] = "returning"
+            if entering != "1A":  # "first year" -> 1A is a NEW student, not returning
+                intake["standing"] = "returning"
+        # A pasted transcript: several course codes at once, even without a
+        # keyword like "completed". Treat as the returning-student transcript.
+        if not completed_codes:
+            bulk = extract_course_codes(text)
+            if len(bulk) >= 3:
+                completed_codes = bulk
         if completed_codes:
             intake["standing"] = "returning"
             prev_completed = list((state.get("profile") or {}).get("completed") or [])

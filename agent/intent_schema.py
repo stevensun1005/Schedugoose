@@ -60,6 +60,22 @@ class TurnUnderstanding(BaseModel):
     residency: Literal["international", "domestic"] | None = None
     sequence: str | None = Field(None, description="co-op or regular")
     start_term: StartTermOut | None = None
+    entering_term: str | None = Field(
+        None,
+        description=(
+            "The academic term the student is currently in or entering, as a slot "
+            "label like '2B' or '4A'. Map ordinal years: 'first year'->'1A', "
+            "'2nd year'->'2A', '3rd year'->'3A', '4th year'/'final year'/'senior'->'4A'. "
+            "Use the A term unless a specific half (A or B) is stated. Null if not mentioned."
+        ),
+    )
+    completed_courses: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Courses the student says they have already completed or taken — e.g. "
+            "from a pasted transcript. Real UW course codes only; never invent."
+        ),
+    )
     career_goal: str | None = Field(
         None,
         description=(
@@ -104,6 +120,25 @@ class TurnUnderstanding(BaseModel):
         if re.search(r"(Fall|Winter|Spring)\s*\d{4}", text, re.I):
             return None
         return text
+
+    @field_validator("entering_term", mode="before")
+    @classmethod
+    def _norm_entering_term(cls, v: object) -> str | None:
+        if not v:
+            return None
+        text = str(v).upper().replace(" ", "")
+        m = re.search(r"([1-4][AB])", text)
+        if m:
+            return m.group(1)
+        # ordinal year words the model may return literally ("4th year")
+        ordinals = {"1": "1A", "FIRST": "1A", "2": "2A", "SECOND": "2A",
+                    "3": "3A", "THIRD": "3A", "4": "4A", "FOURTH": "4A",
+                    "FINAL": "4A", "SENIOR": "4A"}
+        low = str(v).lower()
+        for key, slot in ordinals.items():
+            if key.lower() in low:
+                return slot
+        return None
 
     @field_validator("residency", mode="before")
     @classmethod

@@ -165,6 +165,24 @@ def apply_understanding(
     if understanding.start_term and not out.get("start_term"):
         out["start_term"] = understanding.start_term.model_dump()
 
+    # Returning student's current year/term ("4th year" -> "4A") and any courses
+    # they've already completed (e.g. a pasted transcript). Either marks them
+    # returning so onboarding stops treating them as a fresh 1A.
+    if understanding.entering_term and not out.get("entering_term"):
+        out["entering_term"] = understanding.entering_term
+        if understanding.entering_term != "1A":
+            out["standing"] = "returning"
+    if understanding.completed_courses:
+        from agent.semantic import normalize_course_code
+
+        prev = list(out.get("completed") or [])
+        merged = list(dict.fromkeys(
+            prev + [normalize_course_code(c) for c in understanding.completed_courses]
+        ))
+        if merged:
+            out["completed"] = merged
+            out["standing"] = "returning"
+
     if understanding.career_goal and understanding.career_goal.strip().lower() not in _NON_CAREER:
         # Accept a career goal only when the user actually expressed one, or when
         # career was the single field still being asked for (so a short reply like

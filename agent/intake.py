@@ -73,17 +73,37 @@ _ENTERING_RE = _re.compile(
     _re.I,
 )
 _STANDING_RE = _re.compile(r"\b(1[ab]|2[ab]|3[ab]|4[ab])\s+(?:student|standing|term)\b", _re.I)
+# Ordinal year → the A term of that year ("4th year" -> "4A"). We default to the
+# first half; the student can say "4B" to refine.
+_YEAR_ORDINAL_RE = _re.compile(
+    r"\b(?:(1st|first|2nd|second|3rd|third|4th|fourth|final|senior)[\s-]*year"
+    r"|year[\s-]*([1-4])|in\s+(?:my\s+)?year\s+([1-4]))\b",
+    _re.I,
+)
+_ORDINAL_TO_SLOT = {
+    "1st": "1A", "first": "1A", "1": "1A",
+    "2nd": "2A", "second": "2A", "2": "2A",
+    "3rd": "3A", "third": "3A", "3": "3A",
+    "4th": "4A", "fourth": "4A", "final": "4A", "senior": "4A", "4": "4A",
+}
 
 
 def parse_entering_term(text: str) -> str | None:
     """The academic term a returning student is entering, e.g. "going into 2B" -> "2B".
 
-    Used to start the plan at the student's current term instead of 1A. Returns
-    an upper-case slot label (``"2B"``) or None when no term is named.
+    Handles explicit slots ("2B", "going into 3A") and ordinal years
+    ("4th year", "final year", "year 3" -> the A term of that year). Returns an
+    upper-case slot label (``"2B"``) or None when nothing is named.
     """
 
     m = _ENTERING_RE.search(text) or _STANDING_RE.search(text)
-    return m.group(1).upper() if m else None
+    if m:
+        return m.group(1).upper()
+    y = _YEAR_ORDINAL_RE.search(text)
+    if y:
+        token = (y.group(1) or y.group(2) or y.group(3) or "").lower()
+        return _ORDINAL_TO_SLOT.get(token)
+    return None
 
 
 def _parse_elective_picks(text: str) -> list[str] | None:
@@ -222,8 +242,19 @@ def is_complete(intake: Intake, config: dict[str, Any] | None = None) -> bool:
 
 
 def next_question(intake: Intake, config: dict[str, Any] | None = None) -> str:
+    returning = intake.get("standing") == "returning" or intake.get("entering_term")
+    entering = intake.get("entering_term")
     if not intake.get("program"):
         return "What program are you in?"
+    # A returning student's transcript is the highest-value thing to collect: it
+    # tells us exactly what to skip. Ask for it before the generic profile items.
+    if returning and not intake.get("completed"):
+        yr = f"your {entering} term" if entering else "your current year"
+        return (
+            f"Since you're already into {yr}, paste the courses you've completed "
+            "(or your transcript text) so I skip them — e.g. \"CS 135, CS 136, "
+            "MATH 135, MATH 137, ...\". You can also say 'skip' to plan the standard sequence."
+        )
     if not intake.get("residency"):
         return "Are you an international student? (yes/no)"
     if not intake.get("sequence"):
@@ -240,6 +271,8 @@ def next_question(intake: Intake, config: dict[str, Any] | None = None) -> str:
             )
         return "Are you in a co-op or regular (non-co-op) sequence?"
     if not intake.get("start_term"):
+        if entering and entering != "1A":
+            return f"When does your next term ({entering}) start? e.g. Fall 2026"
         return "Which term do you start (your 1A)? e.g. Fall 2026"
     if not intake.get("career_goal"):
         return "What career or field are you aiming for?"
