@@ -16,6 +16,7 @@ from data.uw_api import data_source, uw_api_status
 from data.term_codes import term_code_from_start
 from agent.state import PlannerState
 from app import sessions
+from app.metrics import METRICS
 from data.program_reqs import list_programs
 
 router = APIRouter()
@@ -75,6 +76,17 @@ def health() -> dict:
     }
 
 
+@router.get("/metrics")
+def metrics(format: str = "json"):
+    """Observability endpoint: request/latency/LLM-usage/RAG metrics."""
+
+    if format == "prometheus":
+        from fastapi.responses import PlainTextResponse
+
+        return PlainTextResponse(METRICS.prometheus())
+    return METRICS.snapshot()
+
+
 @router.post("/plan", response_model=PlanResponse)
 def plan_endpoint(req: PlanRequest) -> PlanResponse:
     session_id = req.session_id or uuid.uuid4().hex
@@ -87,16 +99,29 @@ def plan_endpoint(req: PlanRequest) -> PlanResponse:
     state.setdefault("profile", {"completed": []})
 
     try:
-        result = plan(state)
+        with METRICS.timer():
+            result = plan(state)
     except Exception:
         # Never 500 the chat UI: degrade to a readable reply and log the cause.
         _log.exception("plan() failed for session %s", session_id)
+        METRICS.incr("errors_total")
         result = dict(state)
         result["explanation"] = (
             "Sorry — I hit an internal error working that out. Please try rephrasing, "
             "or send your message again."
         )
         result["needs_clarification"] = True
+
+    rag_hits = result.get("rag_hits") or []
+    METRICS.record_turn(
+        used_llm=bool(result.get("used_llm")),
+        llm_parse_failed=bool(result.get("llm_parse_failed")),
+        rag_source=(rag_hits[0].get("source") if rag_hits else None),
+    )
+    _log.info(
+        "plan session=%s intent_llm=%s replanned=%s has_plan=%s",
+        session_id, result.get("llm_understood"), result.get("replanned"), bool(result.get("plan")),
+    )
 
     # Record assistant turn and persist.
     result.setdefault("messages", state["messages"])

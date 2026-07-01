@@ -185,6 +185,26 @@ course is normally taken.
 
 ---
 
+## GenAI & MLOps engineering
+
+Beyond the planner, the repo is built like a production GenAI service:
+
+| Concern | Implementation |
+|---------|----------------|
+| **ETL ingestion** | `data/etl.py` + `scripts/etl_courses.py` — extract course/program docs → **chunk** (`data/chunking.py`) → **embed** (`data/embeddings.py`) → **load** to a JSON or MongoDB vector store |
+| **Hybrid RAG** | `data/rag_store.py` fuses **BM25 (lexical)** + **dense embeddings (semantic)** via **Reciprocal Rank Fusion** — catches exact terms *and* paraphrases |
+| **Vector store** | MongoDB Atlas `$vectorSearch` when configured, else an in-repo cosine index; OpenAI embeddings with a deterministic local fallback so dev/CI runs offline |
+| **Agents & orchestration** | LangGraph multi-node agent (`gather → clarify → retrieve → plan_terms → solve → diagnose → explain`) with a functional fallback |
+| **APIs** | FastAPI `/plan`, `/health`, `/metrics` — GenAI model behind a clean HTTP surface |
+| **Observability** | `app/metrics.py` — request/latency counters, **LLM-usage vs rule-based fallback rate**, RAG-source mix; `/metrics` serves JSON or Prometheus |
+| **Finetuning data** | `data/feedback.py` — logs turns to JSONL and exports a **reward-filtered SFT dataset** (chat format) for future LoRA/SFT |
+| **Containers** | `Dockerfile` (+ healthcheck) and `docker-compose.yml` (API + Redis + MongoDB) |
+| **CI/CD quality gate** | `.github/workflows/ci.yml` runs pytest **and the eval harness** on every push/PR (across Python 3.11/3.12) and builds the image — the OR core's 100% plan-correctness is a hard gate |
+
+Run the ingestion pipeline: `python -m scripts.etl_courses --out data/vector_store.json`
+
+---
+
 ## Data Model
 
 API responses are normalized into a few core objects (`scheduler/types.py`):
@@ -406,7 +426,8 @@ schedugoose/
 ├── .env.example                # UW_API_KEY, GROQ_API_KEY, REDIS_URL, ...
 ├── app/
 │   ├── main.py                 # FastAPI entrypoint + chat UI
-│   ├── routes.py               # /plan + /health (graph_trace, rag_hits)
+│   ├── routes.py               # /plan + /health + /metrics
+│   ├── metrics.py              # request/latency/LLM-usage observability
 │   └── sessions.py             # session memory (in-process / Redis)
 ├── agent/
 │   ├── graph.py                # LangGraph assembly + functional run_turn
@@ -428,7 +449,10 @@ schedugoose/
 ├── data/
 │   ├── uw_api.py               # API wrapper + normalization (+ mock fallback)
 │   ├── mock_data.py            # bundled offline catalog
-│   ├── rag_store.py            # career→course RAG (Mongo vector + cosine)
+│   ├── etl.py                  # extract→chunk→embed→load ingestion pipeline
+│   ├── chunking.py             # document chunking   embeddings.py  # dense+BM25
+│   ├── feedback.py             # interaction logging → SFT dataset export
+│   ├── rag_store.py            # hybrid RAG (BM25 + dense + RRF; Mongo vector)
 │   ├── degree_plans.py  program_reqs.py  sequences.py  electives.py
 │   ├── program_templates.py    # standard first-year + recommended timelines (UW)
 │   ├── prereqs.py              # requirementsDescription → prereq codes

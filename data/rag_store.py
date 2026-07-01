@@ -10,6 +10,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
+from data.embeddings import BM25, cosine, embed, embed_batch, tokenize
 from data.knowledge_base import KBEntry, KNOWLEDGE_BASE, retrieve as kb_retrieve
 
 
@@ -20,10 +21,57 @@ class RAGHit:
     courses: tuple[str, ...]
     target_categories: tuple[str, ...]
     skills: tuple[str, ...]
-    source: str  # "mongodb" | "cosine"
+    source: str  # "mongodb" | "hybrid" | "cosine"
 
 
-def _hits_from_kb(scored: list[tuple[KBEntry, float]]) -> list[RAGHit]:
+# Precompute the sparse + dense index over the curated KB once.
+_KB_DOCS = [tokenize(e.text) for e in KNOWLEDGE_BASE]
+_BM25 = BM25(_KB_DOCS)
+_KB_EMBED: list[list[float]] | None = None
+
+
+def _kb_embeddings() -> list[list[float]]:
+    global _KB_EMBED
+    if _KB_EMBED is None:
+        _KB_EMBED = embed_batch([e.text for e in KNOWLEDGE_BASE])
+    return _KB_EMBED
+
+
+def _rrf(rankings: list[list[int]], k: int = 60) -> dict[int, float]:
+    """Reciprocal Rank Fusion — combine several ranked lists into one score."""
+
+    fused: dict[int, float] = {}
+    for ranking in rankings:
+        for rank, idx in enumerate(ranking):
+            fused[idx] = fused.get(idx, 0.0) + 1.0 / (k + rank + 1)
+    return fused
+
+
+def hybrid_retrieve(career_goal: str, top_k: int = 2) -> list[tuple[KBEntry, float]]:
+    """Fuse BM25 (lexical) and embedding (semantic) rankings over the KB.
+
+    Hybrid retrieval catches both exact-term matches ("machine learning") and
+    semantic paraphrases ("teach computers to learn") that either signal alone
+    would miss.
+    """
+
+    if not KNOWLEDGE_BASE:
+        return []
+    query = career_goal or ""
+    sparse = _BM25.scores(tokenize(query))
+    qvec = embed(query)
+    dense = [cosine(qvec, ev) for ev in _kb_embeddings()]
+
+    order = list(range(len(KNOWLEDGE_BASE)))
+    sparse_rank = sorted(order, key=lambda i: sparse[i], reverse=True)
+    dense_rank = sorted(order, key=lambda i: dense[i], reverse=True)
+    fused = _rrf([sparse_rank, dense_rank])
+
+    ranked = sorted(fused.items(), key=lambda kv: kv[1], reverse=True)
+    return [(KNOWLEDGE_BASE[i], round(score, 4)) for i, score in ranked[:top_k]]
+
+
+def _hits_from_kb(scored: list[tuple[KBEntry, float]], source: str = "cosine") -> list[RAGHit]:
     return [
         RAGHit(
             career=e.career,
@@ -31,7 +79,7 @@ def _hits_from_kb(scored: list[tuple[KBEntry, float]]) -> list[RAGHit]:
             courses=tuple(e.courses),
             target_categories=tuple(e.target_categories),
             skills=tuple(e.skills),
-            source="cosine",
+            source=source,
         )
         for e, s in scored
     ]
@@ -62,7 +110,7 @@ def _mongo_retrieve(career_goal: str, top_k: int) -> list[RAGHit] | None:
                 "$vectorSearch": {
                     "index": index_name,
                     "path": "embedding",
-                    "queryVector": _embed_query(career_goal),
+                    "queryVector": embed(career_goal),
                     "numCandidates": max(top_k * 10, 20),
                     "limit": top_k,
                 }
@@ -90,44 +138,13 @@ def _mongo_retrieve(career_goal: str, top_k: int) -> list[RAGHit] | None:
         return None
 
 
-def _embed_query(text: str) -> list[float]:
-    """Embed a query for vector search. Uses OpenAI when configured, else a hash bag."""
-
-    api_key = os.getenv("OPENAI_API_KEY")
-    model = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
-    if api_key:
-        try:
-            import httpx
-
-            resp = httpx.post(
-                "https://api.openai.com/v1/embeddings",
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={"input": text, "model": model},
-                timeout=15.0,
-            )
-            resp.raise_for_status()
-            return resp.json()["data"][0]["embedding"]
-        except Exception:
-            pass
-    # Deterministic pseudo-embedding for local dev (not for production search quality).
-    import hashlib
-    import math
-
-    dim = 64
-    vec = [0.0] * dim
-    for token in text.lower().split():
-        h = int(hashlib.md5(token.encode()).hexdigest(), 16)
-        vec[h % dim] += 1.0
-    norm = math.sqrt(sum(v * v for v in vec)) or 1.0
-    return [v / norm for v in vec]
-
-
 def retrieve_career_context(career_goal: str, top_k: int = 2) -> tuple[list[RAGHit], list[str], set[str]]:
     """Return (RAG hits, target categories, grounded course codes)."""
 
     hits = _mongo_retrieve(career_goal, top_k)
     if hits is None:
-        hits = _hits_from_kb(kb_retrieve(career_goal, top_k))
+        # Local path: hybrid (BM25 + dense) fusion over the curated KB.
+        hits = _hits_from_kb(hybrid_retrieve(career_goal, top_k), source="hybrid")
 
     categories: list[str] = []
     codes: set[str] = set()
@@ -140,6 +157,10 @@ def retrieve_career_context(career_goal: str, top_k: int = 2) -> tuple[list[RAGH
 
 
 def rag_backend() -> str:
+    from data.embeddings import embedding_backend
+
     if os.getenv("MONGODB_URI"):
-        return "mongodb" if _mongo_retrieve("test", 1) is not None else "mongodb (configured, fallback active)"
-    return "cosine (local KB)"
+        if _mongo_retrieve("test", 1) is not None:
+            return "mongodb vector search"
+        return "mongodb (configured, hybrid fallback active)"
+    return f"hybrid BM25+dense (local KB, {embedding_backend()} embeddings)"

@@ -16,3 +16,8 @@ env/
 .vscode/
 .idea/
 .DS_Store
+
+# Generated ETL / feedback artifacts
+data/vector_store.json
+data/interactions.jsonl
+data/sft_dataset.jsonl

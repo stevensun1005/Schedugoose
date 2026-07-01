@@ -1,0 +1,11 @@
+.git
+.venv
+venv
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+.env
+*.egg-info
+data/vector_store.json
+data/interactions.jsonl

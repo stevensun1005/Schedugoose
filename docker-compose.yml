@@ -1,0 +1,34 @@
+# Local stack: API + Redis (session/cache) + MongoDB (vector store).
+# `docker compose up` — the app runs offline (mock data) with no keys set.
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MONGODB_URI=mongodb://mongo:27017
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - UW_API_KEY=${UW_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    depends_on:
+      - redis
+      - mongo
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+volumes:
+  mongo_data:
