@@ -23,7 +23,8 @@ from data.degree_plans import DOMESTIC_LANGUAGE_CATEGORY, INTL_ENGLISH_CATEGORY,
 from data.program_reqs import get_program_reqs
 
 # Course-code matcher, e.g. "cs486", "CS 486", "stat 341".
-_COURSE_RE = re.compile(r"\b([A-Za-z]{2,5})\s?([0-9]{3}[A-Za-z]?)\b")
+# 2-6 letters (COMMST, HEALTH, ACTSC) and 0-3 spaces (Quest pads "CS  135").
+_COURSE_RE = re.compile(r"\b([A-Za-z]{2,6})[ \t]{0,3}([0-9]{3}[A-Za-z]?)\b")
 
 _DEFAULT_WEIGHTS = {"career": 0.5, "easy": 0.3, "prof": 0.2, "morning": 0.0, "friday": 0.0}
 

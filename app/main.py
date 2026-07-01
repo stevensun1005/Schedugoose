@@ -201,8 +201,18 @@ fileInput.addEventListener('change', async () => {
     const res = await fetch('/transcript', { method: 'POST', body: fd });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'Could not read that file.');
-    note.textContent = 'Found ' + data.courses.length + ' completed courses in your transcript.';
-    input.value = 'Here is my transcript — I have already completed: ' + data.courses.join(', ');
+    let noteText = 'Found ' + data.courses.length + ' courses in your transcript';
+    if (data.in_progress && data.in_progress.length)
+      noteText += ' (' + data.in_progress.length + ' in progress)';
+    if (data.failed && data.failed.length)
+      noteText += '. Excluded failed attempts: ' + data.failed.join(', ');
+    note.textContent = noteText + '.';
+    // Failed codes stay OUT of the message so they aren't claimed as completed.
+    let msg = 'Here is my transcript — ';
+    if (data.program) msg += "I'm in " + data.program + ', ';
+    if (data.level) msg += 'currently in my ' + data.level + ' term. ';
+    msg += 'I have already completed or am currently taking: ' + data.courses.join(', ');
+    input.value = msg;
     form.requestSubmit();
   } catch (err) {
     note.textContent = '⚠️ ' + err.message;

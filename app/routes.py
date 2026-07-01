@@ -133,8 +133,20 @@ async def transcript_endpoint(file: UploadFile) -> dict:
     else:
         text = raw.decode("utf-8", errors="ignore")
 
-    codes = extract_course_codes(text)
     METRICS.incr("transcript_uploads_total")
+
+    # Quest transcripts carry grades: parse Attempted/Earned so failed attempts
+    # are NOT counted as completed (a blind code sweep would skip courses the
+    # student still needs), and the in-progress final term is kept separate.
+    from data.transcript import looks_like_transcript, parse_transcript
+
+    if looks_like_transcript(text):
+        info = parse_transcript(text)
+        courses = info["completed"] + info["in_progress"]
+        if courses:
+            return {"ok": True, "courses": courses, **info}
+
+    codes = extract_course_codes(text)
     if not codes:
         return {"ok": False, "courses": [],
                 "error": "No course codes found in that file — try pasting the text into the chat."}
