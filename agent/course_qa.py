@@ -52,8 +52,14 @@ _PLANNING_PHRASES = (
     "avoid",
     "must take",
     "include",
-    "add to",
     "drop",
+    # revision verbs — "add PHIL 145 to 2A" is a change, not a course lookup
+    "add ",
+    "remove",
+    "put ",
+    "move ",
+    "take out",
+    "instead",
 )
 
 _SYSTEM = """You are Schedugoose, a University of Waterloo course-planning assistant.

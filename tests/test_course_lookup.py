@@ -34,6 +34,17 @@ def test_confirmed_absent_course_flagged(monkeypatch):
     assert facts.get("found") is False
 
 
+def test_revision_verbs_not_treated_as_lookup():
+    from agent.course_qa import is_course_info_question
+
+    assert is_course_info_question("what is CS 246")
+    assert is_course_info_question("prereqs for CS 341")
+    # "add/swap/remove/put/move X …" is a plan change, not a course lookup.
+    for msg in ("add PHIL 145 to 2A", "swap CS 486 for CS 480", "remove MUSIC 116",
+                "put STAT 341 in 3B", "move CS 246 to 2A"):
+        assert not is_course_info_question(msg), msg
+
+
 def test_course_comparison_covers_both():
     from agent.course_qa import compare_courses, is_comparison
 
