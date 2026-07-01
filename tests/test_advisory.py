@@ -27,6 +27,19 @@ def test_advisory_only_suggests_real_courses_not_in_plan() -> None:
     assert "CS 486" not in text        # already in the plan, not re-suggested
 
 
+def test_advisory_skips_core_and_shows_prereqs() -> None:
+    plan = {"terms": [{"label": "3A", "kind": "study", "courses": ["STAT 231"]}]}
+    state = {
+        "intake": {"career_goal": "data science"}, "plan": plan,
+        # CS 240 is core (required) — must NOT be recommended; CS 451 is an elective.
+        "rag_hits": [{"courses": ["CS 240", "CS 451", "STAT 341"]}],
+    }
+    text = _fallback_advisory(state)
+    assert "CS 240" not in text                 # core/required is never "recommended"
+    assert "CS 451" in text and "prereq" in text.lower()   # elective, with its prereq
+    assert "CS 348" in text                     # CS 451's prerequisite is shown
+
+
 def test_explain_uses_advisory_not_template(monkeypatch) -> None:
     monkeypatch.setattr("agent.advisory.llm_available", lambda: True)
     monkeypatch.setattr(

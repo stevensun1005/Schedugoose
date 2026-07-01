@@ -119,6 +119,17 @@ def gather_constraints(state: PlannerState) -> dict[str, Any]:
         if new_res and new_res != intake.get("residency"):
             intake["residency"] = new_res
 
+    # A specialization / minor added after the plan exists ("I also want the
+    # business specialization") — pull in its electives so the re-plan reflects it.
+    degree_changed = state.get("plan") and base_intake.get("degree_plan") != intake.get("degree_plan")
+    if degree_changed:
+        from data.electives import infer_confident_picks
+
+        confident = infer_confident_picks(intake, text)
+        if confident:
+            existing = list(intake.get("elective_picks") or [])
+            intake["elective_picks"] = list(dict.fromkeys(existing + confident))
+
     if not intake.get("career_goal") and all(
         intake.get(k) for k in ("program", "residency", "sequence", "start_term")
     ):
@@ -128,7 +139,7 @@ def gather_constraints(state: PlannerState) -> dict[str, Any]:
     career_goal = intake.get("career_goal") or state.get("career_goal", "") or text
     turn_revision = revision_delta(prev, config)
     config_changed = _plan_config_changed(prev, config, text)
-    profile_changed = any(
+    profile_changed = bool(degree_changed) or any(
         base_intake.get(k) and base_intake.get(k) != intake.get(k)
         for k in ("program", "residency", "sequence", "start_term")
     )

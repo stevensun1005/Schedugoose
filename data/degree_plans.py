@@ -104,7 +104,7 @@ class DegreePlan:
     def display(self) -> str:
         parts = [self.primary.replace("-Major", "").replace("-Generic", "")]
         for s in self.specializations:
-            parts.append(s.replace("-Specialization", " spec"))
+            parts.append(s.replace("CS-", "").replace("-Specialization", " spec"))
         for m in self.minors:
             parts.append(m.replace("-Minor", " minor"))
         for m in self.extra_majors:

@@ -29,6 +29,11 @@ Grounding rules (STRICT — violations are bugs):
 - Never recommend a course that is already in the plan as if it were missing.
 - Only suggest courses from the "Courses they could add" list. If that list is
   empty, do not suggest specific courses.
+- Do NOT recommend core / required courses (they're already required — the
+  student takes them regardless). Only recommend electives / upper-year options
+  they'd actually choose.
+- When you recommend a course, ALWAYS include its prerequisites exactly as given
+  in the list (e.g. "CS 486 — Intro to AI (prereq: CS 245, STAT 231)").
 - If the career goal is "none stated", do NOT assume one (not data science, not
   anything). Say no specific goal was given and invite them to name one.
 
@@ -47,8 +52,13 @@ def compact_plan_summary(plan: dict[str, Any]) -> str:
     return "\n".join(lines[:16])
 
 
-def _titles() -> dict[str, str]:
-    return {c.course_id: c.title for c in fetch_courses()}
+# Core / required categories — students take these regardless, so never
+# "recommend" them; recommendations should be electives / upper-year options.
+_CORE_CATS = {"CS-Core", "Math-Core", "STAT-Core", "Comm", "PD"}
+
+
+def _catalog() -> dict[str, Any]:
+    return {c.course_id: c for c in fetch_courses()}
 
 
 def _has_career(intake: dict[str, Any], state: PlannerState) -> str | None:
@@ -62,28 +72,41 @@ def _plan_ids(plan: dict[str, Any]) -> list[str]:
     return [c for t in plan.get("terms", []) for c in (t.get("courses") or [])]
 
 
-def _addable_courses(state: PlannerState, plan: dict[str, Any], titles: dict[str, str]) -> list[str]:
-    """Real catalog courses suggested by the career KB that aren't already planned."""
+def _addable_courses(state: PlannerState, plan: dict[str, Any], catalog: dict[str, Any]) -> list[str]:
+    """Career-KB courses not already planned and not core/required."""
 
     in_plan = set(_plan_ids(plan))
     out: list[str] = []
     for hit in state.get("rag_hits") or []:
         for cid in hit.get("courses") or []:
-            if cid in titles and cid not in in_plan and cid not in out:
-                out.append(cid)
-    return out[:8]
+            c = catalog.get(cid)
+            if not c or cid in in_plan or cid in out:
+                continue
+            if _CORE_CATS & set(c.categories):  # skip required/core courses
+                continue
+            out.append(cid)
+    return out[:6]
 
 
-def _with_titles(ids: list[str], titles: dict[str, str]) -> str:
-    return ", ".join(f"{cid} ({titles[cid]})" for cid in ids if cid in titles)
+def _with_prereqs(ids: list[str], catalog: dict[str, Any]) -> str:
+    """Format 'CS 486 — Intro to AI (prereq: CS 245, STAT 231)' for each course."""
+
+    parts: list[str] = []
+    for cid in ids:
+        c = catalog.get(cid)
+        if not c:
+            continue
+        pre = f"prereq: {', '.join(c.prereqs)}" if c.prereqs else "no prereqs"
+        parts.append(f"{cid} — {c.title} ({pre})")
+    return "; ".join(parts)
 
 
 def _fallback_advisory(state: PlannerState) -> str:
     intake = state.get("intake") or {}
     plan = state.get("plan") or {}
-    titles = _titles()
+    catalog = _catalog()
     career = _has_career(intake, state)
-    addable = _addable_courses(state, plan, titles)
+    addable = _addable_courses(state, plan, catalog)
 
     if career is None:
         return (
@@ -93,8 +116,8 @@ def _fallback_advisory(state: PlannerState) -> str:
         )
     if addable:
         return (
-            f"For **{career}**, courses that fit and aren't in your plan yet: "
-            f"{_with_titles(addable, titles)}. Tell me a term and I'll try to swap one in."
+            f"For **{career}**, electives beyond your required courses that fit — with "
+            f"prerequisites: {_with_prereqs(addable, catalog)}. Tell me a term and I'll try to slot one in."
         )
     return (
         f"For **{career}**, your plan already covers the relevant courses. "
@@ -110,18 +133,21 @@ def advisory_reply(state: PlannerState) -> tuple[str, bool]:
 
     intake = state.get("intake") or {}
     plan = state.get("plan") or {}
-    titles = _titles()
+    catalog = _catalog()
     career = _has_career(intake, state)
-    addable = _addable_courses(state, plan, titles)
-    in_plan = _with_titles(_plan_ids(plan), titles)
+    addable = _addable_courses(state, plan, catalog)
+    in_plan = ", ".join(
+        f"{cid} ({catalog[cid].title})" for cid in _plan_ids(plan) if cid in catalog
+    )
 
     payload = (
         f"Latest user message:\n{last_user_message(state)}\n\n"
         f"Program: {intake.get('program') or 'unknown'}\n"
         f"Career goal: {career or 'none stated'}\n\n"
         f"Courses in the plan (code + real title — use these titles, invent nothing):\n{in_plan}\n\n"
-        f"Courses they could add (career-KB suggestions not already planned):\n"
-        f"{_with_titles(addable, titles) or '(none)'}"
+        f"Courses they could add (electives beyond requirements, with prerequisites — "
+        f"recommend ONLY from here, always cite the prereq):\n"
+        f"{_with_prereqs(addable, catalog) or '(none)'}"
     )
     text = complete_text(_SYSTEM, payload)
     if text:

@@ -104,6 +104,15 @@ def test_switch_sequence_replans(planned):
     assert s.get("replanned")
 
 
+def test_add_specialization_mid_conversation_replans(planned):
+    # "I also want the business specialization" must update the plan, not no-op.
+    s = _ask(planned, "i also want business specialization")
+    assert s.get("replanned")
+    assert "Business" in (s["plan"].get("degree_plan") or "")
+    scheduled = {c for t in s["plan"]["terms"] for c in t.get("courses", [])}
+    assert scheduled & {"ECON 101", "ENGL 119", "SPCOM 223", "ENGL 210"}
+
+
 def test_question_does_not_accidentally_replan(planned):
     # A workload question must not silently rebuild the plan.
     s = _ask(planned, "which term is the hardest?")
