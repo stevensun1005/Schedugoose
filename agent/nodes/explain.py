@@ -122,6 +122,19 @@ def explain(state: PlannerState) -> dict[str, Any]:
         answer, used_llm = answer_course_question(user_msg, facts)
         return {"explanation": answer, "used_llm": used_llm, "llm_explained": used_llm}
 
+    # Help works in any state; plan facts (graduation, work terms, summary,
+    # smalltalk, off-topic) once a plan exists — deterministic, never a re-dump.
+    from agent.plan_qa import help_text, is_help_request, plan_qa_reply, wants_plan_summary
+    _meta = {"used_llm": bool(state.get("llm_understood")), "llm_explained": False}
+    if is_help_request(state):
+        return {"explanation": help_text(), **_meta}
+    if plan:
+        if wants_plan_summary(state):
+            return {"explanation": _template_plan(intake, config, plan), **_meta}
+        pq = plan_qa_reply(state)
+        if pq is not None:
+            return {"explanation": pq, **_meta}
+
     req_block = ""
     if plan and wants_requirements_qa(state):
         req_block = format_requirements_answer(user_msg, intake, plan) + "\n\n---\n\n"
@@ -185,8 +198,22 @@ def explain(state: PlannerState) -> dict[str, Any]:
             "used_llm": explained or bool(state.get("llm_understood")),
             "llm_explained": explained,
         }
+    # Plan was just (re)built this turn → show the full term-by-term plan.
+    if state.get("replanned"):
+        return {
+            "explanation": pin_note + req_block + _template_plan(intake, config, plan),
+            "used_llm": bool(state.get("llm_understood")),
+            "llm_explained": False,
+        }
+    # A plan already exists and this turn didn't change it — answer briefly
+    # instead of re-dumping the whole schedule (which the UI already shows).
+    if req_block:
+        return {"explanation": req_block.rstrip("- \n"), "used_llm": bool(state.get("llm_understood")), "llm_explained": False}
     return {
-        "explanation": pin_note + req_block + _template_plan(intake, config, plan),
+        "explanation": pin_note + (
+            "Your plan is above. Tell me what to change (e.g. \"make 2A lighter\", "
+            "\"no music in 1A\", \"swap CS 486 for CS 480\"), ask about a course, or say **help**."
+        ),
         "used_llm": bool(state.get("llm_understood")),
         "llm_explained": False,
     }

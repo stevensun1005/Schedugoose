@@ -266,25 +266,28 @@ def wants_advisory_reply(state: PlannerState) -> bool:
 
 
 def should_replan(state: PlannerState) -> bool:
-    """Skip expensive re-solve when the user only wants an explanation."""
+    """Re-solve only when the turn actually changes the plan.
+
+    A plan is expensive to rebuild and re-dumping it is poor UX, so once a plan
+    exists we replan only on an explicit revision, a preference/config change, or
+    a profile change (start term, sequence, residency, program) — not for
+    greetings, questions, explanations, or course lookups.
+    """
 
     from agent.intake import is_complete
 
     intake = state.get("intake") or {}
     if not is_complete(intake, state.get("config")):
         return False
-    # Onboarding just completed and there is no plan yet — always build the
-    # first plan, even when the closing turn is labelled "onboarding".
     if not state.get("plan"):
+        return True  # first plan
+    if wants_plan_revision(state):
         return True
-    if wants_advisory_reply(state):
-        if wants_career_advice(state) or wants_plan_revision(state):
-            return True
-        return False
-    u = understanding_from_state(state)
-    if u and u.intent == "onboarding":
-        return False
-    return True
+    if state.get("config_changed"):
+        return True  # a preference/constraint changed this turn (load, avoid, pin…)
+    if state.get("profile_changed"):
+        return True  # start term / sequence / residency / program changed
+    return False
 
 
 def course_codes_for_lookup(state: PlannerState) -> list[str]:

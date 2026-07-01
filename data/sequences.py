@@ -230,7 +230,7 @@ PROGRAMS: list[Program] = [
     Program("Systems Design Engineering", "Engineering", "Eng-Generic",
             ("systems design engineering", "systems design", "syde")),
     Program("Engineering (general)", "Engineering", "Eng-Generic",
-            ("engineering", "engineer")),
+            ("engineering",)),  # not bare "engineer" — that's a career word (backend engineer)
     Program("Mathematics", "Math", "CS-Major",
             ("mathematics major", "combinatorics", "pure math", "applied math")),
     Program("Science (general)", "Science", "Science-Generic",

@@ -59,10 +59,32 @@ def _route_after_solve(state: PlannerState) -> str:
     return "explain"
 
 
+def _reset_state(state: PlannerState) -> PlannerState:
+    """Clear the session back to a fresh onboarding (for "start over")."""
+
+    return _merge(state, {
+        "intake": {}, "config": None, "plan": None, "schedule": None,
+        "profile": {"completed": []}, "career_goal": "",
+        "needs_clarification": True, "replanned": False,
+        "explanation": (
+            "Okay, starting fresh! 🪿 Tell me about yourself — your program, whether "
+            "you're a new first-year or returning (and any courses you've taken), and "
+            "what you're aiming for."
+        ),
+        "clarification": "restart", "used_llm": False, "llm_understood": False,
+        "llm_explained": False,
+    })
+
+
 def run_turn(state: PlannerState) -> PlannerState:
     """Run one planning turn functionally (no LangGraph dependency)."""
 
-    state = _merge(state, {"graph_trace": []})
+    from agent.plan_qa import is_reset
+
+    if is_reset(state):
+        return _reset_state(state)
+
+    state = _merge(state, {"graph_trace": [], "replanned": False})
     state = _merge(state, gather_constraints(state))
 
     if wants_course_lookup(state) and not state.get("answering_onboarding"):
@@ -79,11 +101,13 @@ def run_turn(state: PlannerState) -> PlannerState:
     intake = state.get("intake") or {}
     if is_complete(intake, state.get("config")) and should_replan(state):
         state = _merge(state, plan_terms(state))
-    else:
+    elif not state.get("plan"):
+        # No plan yet and not ready for a full sequence solve — single-term preview.
         state = _merge(state, build_model_node(state))
         state = _merge(state, solve_schedule(state))
         if state.get("infeasible"):
             state = _merge(state, diagnose(state))
+    # else: a plan exists and nothing changed — answer the question, don't re-solve.
 
     state = _merge(state, explain(state))
     return state
@@ -138,6 +162,11 @@ def build_graph() -> Any:
 
 def plan(state: PlannerState) -> PlannerState:
     """Single-turn entrypoint. Uses LangGraph if available, else ``run_turn``."""
+
+    from agent.plan_qa import is_reset
+
+    if is_reset(state):
+        return _reset_state(state)
 
     try:
         app = build_graph()

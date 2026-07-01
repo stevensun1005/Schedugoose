@@ -23,6 +23,22 @@ _INFO_PHRASES = (
     "about the course",
     "course about",
     "know about",
+    "prereq",
+    "prerequisite",
+    "need before",
+    "before taking",
+    "before i take",
+    "requirement for",
+    "required for",
+    "vs",
+    "versus",
+    "compare",
+    "difference between",
+    "which is better",
+    "which is easier",
+    "when do i take",
+    "when should i take",
+    "what term",
 )
 
 _PLANNING_PHRASES = (
