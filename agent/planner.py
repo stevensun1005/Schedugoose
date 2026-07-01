@@ -214,8 +214,27 @@ def plan_sequence(
 
     catalog = fetch_courses(start_term=start)
     degree_plan = plan_from_intake(intake)
-    degree_reqs = resolve_requirements(degree_plan)
-    remaining = _remaining_reqs(degree_reqs, catalog, completed)
+
+    # Requirements compiled live from the UW academic calendar (Kuali) beat the
+    # curated tables: tag catalog courses with the groups they can fill, then
+    # diff the transcript against each group to get what's actually missing.
+    live_reqs = intake.get("live_reqs") or {}
+    requirements_source = None
+    if live_reqs.get("groups"):
+        from data.requirements_compiler import (
+            ReqGroup,
+            remaining_from_groups,
+            tag_catalog,
+        )
+
+        groups = [ReqGroup.from_dict(g) for g in live_reqs["groups"]]
+        tag_catalog(groups, catalog)
+        remaining = remaining_from_groups(groups, completed)
+        degree_reqs = {g.label: g.count for g in groups}
+        requirements_source = live_reqs.get("url")
+    else:
+        degree_reqs = resolve_requirements(degree_plan)
+        remaining = _remaining_reqs(degree_reqs, catalog, completed)
 
     # A transcript reports true cumulative earned credits; most of a returning
     # student's courses (other faculties, WLU, …) aren't in our catalog, so
@@ -413,5 +432,6 @@ def plan_sequence(
         "elective_picks": sorted(elective_picks),
         "scheduled_picks": sorted(scheduled_picks),
         "unscheduled_picks": unscheduled_picks,
+        "requirements_source": requirements_source,
         "graph_trace": trace,
     }

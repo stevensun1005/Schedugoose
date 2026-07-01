@@ -75,6 +75,18 @@ def _apply_transcript(state: PlannerState, t: dict) -> None:
             intake["sequence"] = "sci-regular"
     if t.get("units_earned"):
         intake["units_earned"] = float(t["units_earned"])
+    # The user's workflow, step 3: look the program's requirements up on the UW
+    # site (Kuali) and compile them into solver constraints. Live only — when
+    # offline the planner falls back to the curated requirement tables.
+    if t.get("program") and not intake.get("live_reqs"):
+        from data.requirements_compiler import compile_for_program
+
+        live = compile_for_program(t["program"])
+        if live:
+            intake["live_reqs"] = {
+                "title": live["title"], "url": live["url"],
+                "groups": [g.to_dict() for g in live["groups"]],
+            }
     state["intake"] = intake
 
 

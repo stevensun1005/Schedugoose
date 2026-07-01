@@ -89,6 +89,9 @@ def _template_plan(intake: dict[str, Any], config: dict[str, Any], plan: dict[st
                 "graduation target — lightening a term freed a slot with nowhere to "
                 "reflow it. Tell me to make another term heavier to make it up."
             )
+    src_url = plan.get("requirements_source")
+    if src_url:
+        lines.append(f"Degree requirements compiled live from the UW academic calendar: {src_url}")
     trace = plan.get("graph_trace") or []
     if trace:
         lines.append(f"Agent pipeline ({len(trace)} steps): {' → '.join(trace[:6])}{'…' if len(trace) > 6 else ''}.")
