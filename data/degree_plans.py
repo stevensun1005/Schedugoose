@@ -64,29 +64,26 @@ MAJORS: dict[str, dict[str, int]] = {
     },
 }
 
+# All eight UW CS specializations. Category minimums are the planner-facing view;
+# full course requirements + sources live in data/degree_requirements.py.
 SPECIALIZATIONS: dict[str, dict[str, int]] = {
-    "CS-AI-Specialization": {
-        "CS-AI": 2,
-        "STAT-ML": 1,
-        "CS-4xx": 1,  # extra depth beyond major minimum
-    },
-    "CS-Computational-Math-Specialization": {
-        "Math-Core": 2,
-        "CS-Theory": 1,
-    },
-    "CS-HCI-Specialization": {
-        "CS-3xx": 1,
-        "Elective": 1,
-    },
-    "CS-Business-Specialization": {
-        "Elective": 2,
-        "Comm": 1,
-    },
+    "CS-AI-Specialization": {"CS-AI": 2, "STAT-ML": 1, "CS-4xx": 1},
+    "CS-Computational-Math-Specialization": {"Math-Core": 2, "CS-Theory": 1},
+    "CS-HCI-Specialization": {"CS-3xx": 1, "Elective": 1},
+    "CS-Business-Specialization": {"Elective": 2, "Comm": 1},
+    "CS-Game-Design-Specialization": {"CS-4xx": 1, "Elective": 1},
+    "CS-Digital-Hardware-Specialization": {"Elective": 2},
+    # These need subjects outside the catalog (BIOL / FINE); selectable + citable
+    # but planned only at the category level.
+    "CS-Bioinformatics-Specialization": {},
+    "CS-Computational-Fine-Art-Specialization": {},
 }
 
 MINORS: dict[str, dict[str, int]] = {
     "Stats-Minor": {"STAT-Core": 3, "Math-Minor": 1},
     "Math-Minor": {"Math-Core": 4, "Math-Minor": 2},
+    "PMath-Minor": {"Math-Core": 4},
+    "CO-Minor": {"Math-Core": 4},
     "Economics-Minor": {"Elective": 3},
     "Psych-Minor": {"Elective": 3},
 }
@@ -187,12 +184,18 @@ _SPEC_PATTERNS: list[tuple[str, str]] = [
     (r"\bbusiness\s+spec\w*|\bbusiness specialization\b", "CS-Business-Specialization"),
     (r"\bcomputational math spec", "CS-Computational-Math-Specialization"),
     (r"\bhci spec|\bhuman-computer interaction spec", "CS-HCI-Specialization"),
+    (r"\bgame design spec|\bgame spec|\bgames? specialization\b", "CS-Game-Design-Specialization"),
+    (r"\bdigital hardware spec|\bhardware specialization\b", "CS-Digital-Hardware-Specialization"),
+    (r"\bbioinformatics spec|\bbioinformatics specialization\b|\bcomputational biology\b", "CS-Bioinformatics-Specialization"),
+    (r"\bcomputational fine art|\bfine art spec|\bcomputational art\b", "CS-Computational-Fine-Art-Specialization"),
     (r"\bspecializ(?:e|ing|ation) in ai\b", "CS-AI-Specialization"),
     (r"\bspecializ(?:e|ing|ation) in business\b|\bwant.*business\b", "CS-Business-Specialization"),
 ]
 
 _MINOR_PATTERNS: list[tuple[str, str]] = [
     (r"\bstats minor\b|\bstatistics minor\b", "Stats-Minor"),
+    (r"\bpure math(?:ematics)? minor\b|\bpmath minor\b", "PMath-Minor"),
+    (r"\b(?:combinatorics|optimization|c\s*&\s*o|co) minor\b", "CO-Minor"),
     (r"\bmath minor\b|\bmathematics minor\b", "Math-Minor"),
     (r"\becon(?:omics)? minor\b", "Economics-Minor"),
     (r"\bpsych(?:ology)? minor\b", "Psych-Minor"),

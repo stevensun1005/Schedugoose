@@ -36,11 +36,13 @@ uvicorn app.main:app --reload
 python scripts/e2e_user_flow.py
 ```
 
-Everything runs **offline with zero keys**: without `UW_API_KEY` it uses bundled
-mock course data. For the LLM layers, set a free **`GROQ_API_KEY`**
-([console.groq.com/keys](https://console.groq.com/keys), no credit card) in
-`.env` — otherwise the semantic and explanation layers fall back to deterministic
-rules. Recommended: `GROQ_MODEL=llama-3.1-8b-instant` (higher free-tier quota).
+The **running app is LLM-required** — every message goes through the LLM (Groq),
+so set a free **`GROQ_API_KEY`** ([console.groq.com/keys](https://console.groq.com/keys),
+no credit card) in `.env`. Without it, `/plan` returns a clear "set your key"
+message rather than degrading to rules. Recommended: `GROQ_MODEL=llama-3.1-8b-instant`.
+(Set `SCHEDUGOOSE_REQUIRE_LLM=0` to allow the rule-based fallback — used by the
+**deterministic test + eval harness**, which run fully offline with zero keys and
+without `UW_API_KEY`, on bundled mock data.)
 
 To run the whole test suite: `python -m pytest`.
 
@@ -162,7 +164,7 @@ same edges functionally, so the agent runs with or without LangGraph installed.
 | Data | Source | Compliance |
 |------|--------|------------|
 | Courses, sections, times, instructors, capacity | **UW Open Data API v3** (official, API key) with bundled **mock catalog fallback** | Authoritative — no scraping required |
-| Program / graduation requirements | Undergraduate calendar (curated) | Public |
+| Program / graduation requirements — **majors, all 8 CS specializations, and minors** | Undergraduate calendar + CS plan checklists (curated, `data/degree_requirements.py`, source-cited) | Public |
 | **Standard first-year courses + recommended timelines** | UW advising pages (curated, with source links) | Public |
 | Career → skills → courses mapping | Self-built knowledge base (RAG) | Owned |
 | Course difficulty / workload | Workload-balance signal | Optional, source-checked |
@@ -454,6 +456,7 @@ schedugoose/
 │   ├── feedback.py             # interaction logging → SFT dataset export
 │   ├── rag_store.py            # hybrid RAG (BM25 + dense + RRF; Mongo vector)
 │   ├── degree_plans.py  program_reqs.py  sequences.py  electives.py
+│   ├── degree_requirements.py  # majors/minors/all CS specializations (UW, cited)
 │   ├── program_templates.py    # standard first-year + recommended timelines (UW)
 │   ├── prereqs.py              # requirementsDescription → prereq codes
 │   ├── restrictions.py         # "<program> students only" eligibility (H6)

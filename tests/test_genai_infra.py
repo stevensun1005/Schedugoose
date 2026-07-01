@@ -99,9 +99,11 @@ def test_feedback_logging_and_sft_export(tmp_path):
 # --- metrics + endpoint -----------------------------------------------------
 def test_metrics_endpoint_and_recording(monkeypatch):
     warnings.filterwarnings("ignore")
-    # Run offline so the request is fast and deterministic (no live LLM call).
+    # Run offline so the request is fast and deterministic (no live LLM call);
+    # allow the rules path for this metrics check.
     for k in ("GROQ_API_KEY", "OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "UW_API_KEY"):
         monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("SCHEDUGOOSE_REQUIRE_LLM", "0")
     from fastapi.testclient import TestClient
 
     from app.main import app

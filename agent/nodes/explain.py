@@ -123,17 +123,24 @@ def explain(state: PlannerState) -> dict[str, Any]:
         return {"explanation": answer, "used_llm": used_llm, "llm_explained": used_llm}
 
     # Help works in any state; plan facts (graduation, work terms, summary,
-    # smalltalk, off-topic) once a plan exists — deterministic, never a re-dump.
+    # smalltalk, off-topic) once a plan exists — deterministic facts, but phrased
+    # by the LLM so every turn runs through it (facts stay exact).
+    from agent.llm import grounded_reply
     from agent.plan_qa import help_text, is_help_request, plan_qa_reply, wants_plan_summary
-    _meta = {"used_llm": bool(state.get("llm_understood")), "llm_explained": False}
+
+    def _grounded(text: str) -> dict[str, Any]:
+        reply, used = grounded_reply(user_msg, text)
+        return {"explanation": reply, "used_llm": used or bool(state.get("llm_understood")), "llm_explained": used}
+
     if is_help_request(state):
-        return {"explanation": help_text(), **_meta}
+        return _grounded(help_text())
     if plan:
         if wants_plan_summary(state):
-            return {"explanation": _template_plan(intake, config, plan), **_meta}
+            return {"explanation": _template_plan(intake, config, plan),
+                    "used_llm": bool(state.get("llm_understood")), "llm_explained": False}
         pq = plan_qa_reply(state)
         if pq is not None:
-            return {"explanation": pq, **_meta}
+            return _grounded(pq)
 
     req_block = ""
     if plan and wants_requirements_qa(state):
@@ -208,12 +215,8 @@ def explain(state: PlannerState) -> dict[str, Any]:
     # A plan already exists and this turn didn't change it — answer briefly
     # instead of re-dumping the whole schedule (which the UI already shows).
     if req_block:
-        return {"explanation": req_block.rstrip("- \n"), "used_llm": bool(state.get("llm_understood")), "llm_explained": False}
-    return {
-        "explanation": pin_note + (
-            "Your plan is above. Tell me what to change (e.g. \"make 2A lighter\", "
-            "\"no music in 1A\", \"swap CS 486 for CS 480\"), ask about a course, or say **help**."
-        ),
-        "used_llm": bool(state.get("llm_understood")),
-        "llm_explained": False,
-    }
+        return _grounded(req_block.rstrip("- \n"))
+    return _grounded(pin_note + (
+        "Your plan is above. Tell me what to change (e.g. \"make 2A lighter\", "
+        "\"no music in 1A\", \"swap CS 486 for CS 480\"), ask about a course, or say **help**."
+    ))

@@ -10,7 +10,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from agent.graph import plan
-from agent.llm import llm_available, llm_mode_label, llm_model, llm_provider
+from agent.llm import llm_available, llm_mode_label, llm_model, llm_provider, llm_ready, require_llm
 from data.rag_store import rag_backend
 from data.uw_api import data_source, uw_api_status
 from data.term_codes import term_code_from_start
@@ -60,6 +60,8 @@ def health() -> dict:
     return {
         "status": "ok",
         "llm": has_key,
+        "llm_required": require_llm(),
+        "llm_ready": llm_ready(),
         "llm_provider": provider,
         "llm_model": llm_model(),
         "llm_mode": llm_mode_label(),
@@ -90,6 +92,21 @@ def metrics(format: str = "json"):
 @router.post("/plan", response_model=PlanResponse)
 def plan_endpoint(req: PlanRequest) -> PlanResponse:
     session_id = req.session_id or uuid.uuid4().hex
+
+    # LLM-required mode: never answer with rules-only. Fail clearly instead.
+    if require_llm() and not llm_ready():
+        return PlanResponse(
+            session_id=session_id,
+            needs_clarification=True,
+            explanation=(
+                "The assistant needs an LLM API key to run. Set GROQ_API_KEY (free at "
+                "console.groq.com/keys) in .env and restart the server."
+            ),
+            used_llm=False,
+            llm_configured=False,
+            llm_mode=llm_mode_label(),
+        )
+
     state: PlannerState = sessions.load(session_id)
     state.setdefault("messages", [])
     state["messages"].append({"role": "user", "content": req.message})

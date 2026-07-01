@@ -32,6 +32,22 @@ def llm_available() -> bool:
     ))
 
 
+def require_llm() -> bool:
+    """Whether the running app must have an LLM (no offline rule-based mode).
+
+    Defaults to on. The library still degrades gracefully for unit tests / the
+    offline eval, but the API refuses to answer with rules-only when this is set.
+    """
+
+    return os.getenv("SCHEDUGOOSE_REQUIRE_LLM", "1").strip().lower() not in ("0", "false", "no", "off")
+
+
+def llm_ready() -> bool:
+    """True when the app can serve LLM-backed responses."""
+
+    return llm_available()
+
+
 def llm_provider() -> str | None:
     if _has_key("GROQ_API_KEY"):
         return "groq"
@@ -244,6 +260,27 @@ def complete_json(system: str, user: str) -> dict[str, Any] | None:
         return _parse_json_content(text)
     except Exception:
         return None
+
+
+_GROUND_SYSTEM = """You are Schedugoose, a University of Waterloo course-planning assistant.
+Rewrite the FACTS below into a natural, friendly reply to the user's message.
+- Keep every fact, number, course code, and term exactly as given.
+- Do NOT add courses, requirements, or claims that are not in the FACTS.
+- Keep it concise. Reply in the user's language (English or Chinese).
+Return only the reply."""
+
+
+def grounded_reply(user_msg: str, grounded_text: str) -> tuple[str, bool]:
+    """LLM-phrase a deterministic answer, grounded in its facts. Returns (text, used_llm).
+
+    So every turn goes through the LLM in production, while the facts stay exact.
+    Falls back to the deterministic text when the LLM is unavailable (tests/eval).
+    """
+
+    if not grounded_text.strip() or not llm_available():
+        return grounded_text, False
+    out = complete_text(_GROUND_SYSTEM, f"User message:\n{user_msg}\n\nFACTS:\n{grounded_text}")
+    return (out.strip(), True) if out and out.strip() else (grounded_text, False)
 
 
 def complete_text(system: str, user: str) -> str | None:

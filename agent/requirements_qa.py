@@ -9,6 +9,7 @@ from data.degree_plans import (
     plan_from_intake,
     resolve_requirements,
 )
+from data.degree_requirements import ALL_COMPONENTS, describe_component, list_components
 from data.program_templates import format_first_year
 from data.uw_api import data_source
 
@@ -80,11 +81,51 @@ def is_requirements_question(text: str) -> bool:
     ))
     if _is_first_year_question(text):
         return True
+    if _wants_component_list(text) or _find_component_key({}, text):
+        return True
     topic = any(p in low for p in (
         "specialization", "specialisation", "spec", "minor", "major", "degree", "graduate",
-        "business", "ai ", "artificial intelligence",
+        "business", "ai ", "artificial intelligence", "bioinformatics", "game design",
+        "digital hardware", "hci", "human-computer",
     ))
     return asks and topic
+
+
+def _wants_component_list(text: str) -> str | None:
+    """Return 'specialization' / 'minor' when the user asks to list them."""
+
+    low = text.lower()
+    listy = any(w in low for w in ("what", "which", "list", "options", "available", "are there", "can i"))
+    if not listy:
+        return None
+    if "specialization" in low or "specialisation" in low or "spec " in low:
+        return "specialization"
+    if "minor" in low:
+        return "minor"
+    return None
+
+
+def _format_component_list(kind: str) -> str:
+    label = {"specialization": "CS specializations", "minor": "minors"}[kind]
+    lines = [f"UW {label} you can add (source: cs.uwaterloo.ca / undergraduate calendar):"]
+    for c in list_components(kind):
+        note = "" if c.schedulable else "  *(needs courses outside this planner)*"
+        lines.append(f"  • **{c.name}** — {c.summary.split('.')[0]}.{note}")
+    lines.append('Ask "what does the X specialization require?" for the exact courses.')
+    return "\n".join(lines)
+
+
+def _find_component_key(intake: dict, text: str) -> str | None:
+    """Identify a specific specialization/minor named in the text."""
+
+    from data.degree_plans import _MINOR_PATTERNS, _SPEC_PATTERNS
+    import re
+
+    low = text.lower()
+    for pat, key in (*_SPEC_PATTERNS, *_MINOR_PATTERNS):
+        if re.search(pat, low) and key in ALL_COMPONENTS:
+            return key
+    return None
 
 
 def _pick_specialization_key(intake: dict, text: str) -> str | None:
@@ -106,6 +147,18 @@ def format_requirements_answer(
         fy = first_year_answer(text, intake)
         if fy:
             return fy
+
+    # A specific specialization/minor named → cite its real requirements first.
+    comp_key = _find_component_key(intake, text)
+    if comp_key:
+        desc = describe_component(comp_key)
+        if desc:
+            return desc
+
+    # Otherwise "what specializations/minors are there?" → list them.
+    list_kind = _wants_component_list(text)
+    if list_kind:
+        return _format_component_list(list_kind)
 
     spec_key = _pick_specialization_key(intake, text)
     if not spec_key:
