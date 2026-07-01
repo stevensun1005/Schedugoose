@@ -85,19 +85,18 @@ def _clean_terms(query: str) -> list[str]:
 
 
 def _search_union(query: str) -> list[dict]:
-    """Search the cleaned query and its strongest term; merge (Kuali ranks
-    single strong terms better than multi-word phrases)."""
+    """Search the cleaned query plus its strongest individual terms and merge —
+    Kuali ranks single strong terms better than multi-word phrases, so a program
+    like 'Electrical Engineering' surfaces from the 'electrical' search even when
+    the full phrase misses it."""
 
     terms = _clean_terms(query)
     queries = [" ".join(terms) if terms else query]
-    if terms:
-        longest = max(terms, key=len)
-        if longest != queries[0]:
-            queries.append(longest)
+    queries += sorted(set(terms), key=len, reverse=True)[:2]  # two strongest terms
     seen: set[str] = set()
     merged: list[dict] = []
-    for q in queries:
-        for p in search_programs(q):
+    for q in dict.fromkeys(queries):  # dedupe, preserve order
+        for p in search_programs(q, limit=30):  # wide net → let ranking decide
             if p["pid"] not in seen:
                 seen.add(p["pid"])
                 merged.append(p)
@@ -120,14 +119,16 @@ def _ranked(query: str, results: list[dict]) -> list[dict]:
     def score(p: dict) -> tuple:
         t = p["title"].lower()
         overlap = sum(1 for w in terms if w in t)
-        credentialed = int(any(c in t for c in _CREDENTIALS))
+        is_sub = any(w in t for w in ("option", "specialization", "minor"))
         if want_minor:
             kind = 1 if "minor" in t else 0
         elif want_spec:
             kind = 1 if ("special" in t or "option" in t) else 0
         else:
-            kind = 1 if ("minor" not in t and "special" not in t) else 0
-        return (overlap, kind, credentialed, -len(t))
+            kind = 0 if is_sub else 1  # a base major/honours beats an option/spec/minor
+        credentialed = int(any(c in t for c in _CREDENTIALS))
+        # kind first: honour the base-vs-sub-program intent before raw overlap.
+        return (kind, overlap, credentialed, -len(t))
 
     return sorted(programs, key=score, reverse=True)
 
