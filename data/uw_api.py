@@ -200,12 +200,16 @@ def _fetch_live(term: str, subjects: list[str]) -> list[RawRow]:
                         row["requirements_description"] = req_desc
                     rows.append(RawRow(**row))  # type: ignore[arg-type]
                 else:
+                    cats = [f"{subject}-{catalog[0]}xx"]
+                    # Math-faculty 300/400-level → "Math-3xx" requirement bucket
+                    if subject in {"MATH", "STAT", "CO", "AMATH", "PMATH", "ACTSC"} and catalog[:1] in ("3", "4"):
+                        cats.append("Math-3xx")
                     rows.append(RawRow(
                         course_id=course_id,
                         title=title,
                         units=0.5,
                         prereqs=live_prereqs,
-                        categories=[f"{subject}-{catalog[0]}xx"],
+                        categories=cats,
                         component="LEC",
                         section_code="LEC 001",
                         term=term,

@@ -87,3 +87,67 @@ def test_first_year_is_not_returning() -> None:
     u = TurnUnderstanding(entering_term="first year")
     out = apply_understanding({"program": "Computer Science"}, u, text="first year cs")
     assert out.get("standing") != "returning"
+
+
+def _math_studies_intake() -> dict:
+    return {
+        "program": "Mathematical Studies", "faculty": "Math",
+        "reqs_key": "MathStudies-Major", "residency": None,
+        "sequence": "math-regular", "start_term": {"season": "Fall", "year": 2026},
+        "career_goal": "exploring options", "standing": "returning",
+        "entering_term": "4B", "units_earned": 19.25, "elective_picks": [],
+    }
+
+
+# Mirrors a real Quest transcript: MATH 225 (not 235) and MATH 237 taken,
+# CS 245/246 failed (not completed), currently a Mathematical Studies student.
+_TAKEN = {
+    "CS 135", "CS 136", "CS 251", "CS 200", "CS 234", "CS 330", "CS 338",
+    "MATH 135", "MATH 136", "MATH 137", "MATH 138", "MATH 225", "MATH 237",
+    "STAT 230", "STAT 231", "STAT 341", "CO 250", "ANTH 100", "ENGL 119",
+}
+
+
+def test_antireq_of_taken_course_never_scheduled() -> None:
+    from agent.semantic import rule_based_config
+
+    plan = plan_sequence(_math_studies_intake(),
+                         rule_based_config("plan", "MathStudies-Major", None),
+                         set(_TAKEN), "exploring options")
+    sched = {c for t in plan["terms"] for c in t.get("courses", [])}
+    # MATH 225 was taken -> MATH 235/245 blocked; MATH 237 taken -> 247 blocked.
+    assert not sched & {"MATH 235", "MATH 245", "MATH 247"}, sched
+
+
+def test_cs_major_courses_blocked_for_non_cs_program() -> None:
+    from agent.semantic import rule_based_config
+
+    plan = plan_sequence(_math_studies_intake(),
+                         rule_based_config("plan", "MathStudies-Major", None),
+                         set(_TAKEN), "exploring options")
+    sched = {c for t in plan["terms"] for c in t.get("courses", [])}
+    assert "CS 240" not in sched, sched
+    assert not {c for c in sched if c in {"CS 341", "CS 348", "CS 486", "CS 480"}}, sched
+
+
+def test_math_studies_requires_300_level_depth() -> None:
+    from data.degree_plans import MAJORS
+
+    assert MAJORS["MathStudies-Major"]["Math-3xx"] >= 3
+    # And the catalog tags Math-faculty 300+ courses with that category.
+    from data.uw_api import fetch_courses
+
+    cat = {c.course_id: c for c in fetch_courses()}
+    assert "Math-3xx" in cat["STAT 330"].categories
+    assert "Math-3xx" in cat["CO 487"].categories
+    assert "Math-3xx" not in cat["MATH 235"].categories  # 2xx
+
+
+def test_cs_student_still_eligible_for_cs_core() -> None:
+    # The restriction must not break the main CS flow.
+    from agent.semantic import rule_based_config
+
+    intake = _intake()
+    plan = plan_sequence(intake, rule_based_config("plan", "CS-Major", None), set(), "ai")
+    sched = {c for t in plan["terms"] for c in t.get("courses", [])}
+    assert "CS 240" in sched

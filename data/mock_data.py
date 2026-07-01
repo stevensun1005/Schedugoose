@@ -96,7 +96,9 @@ MOCK_ROWS: list[RawRow] = [
     _one("CS 246", "Object-Oriented Software Development", 0, prereqs=["CS 136"], categories=["CS-Core", "CS-2xx"]),
     _one("CS 245", "Logic and Computation", 2, prereqs=["CS 136"], categories=["CS-Core", "CS-2xx", "CS-Theory"]),
     _one("MATH 239", "Introduction to Combinatorics", 8, prereqs=["MATH 136"], categories=["Math-Core", "MATH-2xx", "Math-Minor"]),
-    _one("MATH 237", "Calculus 3 for Honours Math", 6, prereqs=["MATH 138"], categories=["Math-Core", "MATH-2xx"]),
+    _one("MATH 237", "Calculus 3 for Honours Math", 6, prereqs=["MATH 138"], categories=["Math-Core", "MATH-2xx"],
+         antireqs=["MATH 247"],
+         requirements_description="Prereq: MATH 128/138/148; Antireq: MATH 247"),
     _one("STAT 230", "Probability", 4, prereqs=["MATH 138"], categories=["Math-Core", "STAT-Core", "STAT-2xx"]),
     _one("PHIL 145", "Critical Thinking", 5, categories=["Elective"], easiness=0.85),
     _one("RS 110", "Religions of the West", 14, categories=["Elective"], easiness=0.86),
@@ -149,9 +151,18 @@ MOCK_ROWS: list[RawRow] = [
     _one("CS 454", "Distributed Systems", 0, prereqs=["CS 350", "CS 348"], categories=["CS-4xx", "CS-Systems"]),
     _one("CS 459", "Privacy, Cryptography, Security", 1, prereqs=["CS 350"], categories=["CS-4xx", "CS-Security"]),
     _one("STAT 332", "Applied Linear Models", 2, prereqs=["STAT 231"], categories=["STAT-Core", "STAT-3xx"]),
-    _one("MATH 235", "Linear Algebra 2", 3, prereqs=["MATH 136"], categories=["Math-Core", "MATH-2xx", "Math-Minor"]),
-    _one("MATH 245", "Linear Algebra 2 (Advanced)", 11, prereqs=["MATH 235"], categories=["Math-Core", "MATH-2xx", "Math-Minor"]),
-    _one("MATH 247", "Calculus 3 (Advanced)", 13, prereqs=["MATH 237"], categories=["Math-Core", "MATH-2xx"]),
+    # MATH 225/235/245 are alternative linear-algebra-2 courses (one only);
+    # MATH 237/247 are alternative calculus-3 courses. UW lists them as
+    # antirequisites — a student who took one may never take its siblings.
+    _one("MATH 235", "Linear Algebra 2", 3, prereqs=["MATH 136"], categories=["Math-Core", "MATH-2xx", "Math-Minor"],
+         antireqs=["MATH 225", "MATH 245"],
+         requirements_description="Prereq: MATH 106/114/115/136/146; Antireq: MATH 225, 245"),
+    _one("MATH 245", "Linear Algebra 2 (Advanced)", 11, prereqs=["MATH 136"], categories=["Math-Core", "MATH-2xx", "Math-Minor"],
+         antireqs=["MATH 225", "MATH 235"],
+         requirements_description="Prereq: MATH 146; Antireq: MATH 225, 235"),
+    _one("MATH 247", "Calculus 3 (Advanced)", 13, prereqs=["MATH 138"], categories=["Math-Core", "MATH-2xx"],
+         antireqs=["MATH 237"],
+         requirements_description="Prereq: MATH 148; Antireq: MATH 237"),
     _one("ENGL 210", "Technical Writing", 4, categories=["Comm", "Elective"], easiness=0.82),
 ]
 
@@ -163,6 +174,28 @@ MOCK_ROWS.append(RawRow(
     meetings=[RawMeeting(weekdays="W", start="15:30", end="16:20")],
     easiness=0.45, prof_rating=0.8,
 ))
+
+# CS-major core courses are program-restricted at UW ("CS students only") —
+# a Math Studies / other-faculty student may NOT take CS 240, 341, … The CS
+# service stream (CS 1xx, CS 200/230s exc. core) stays open to everyone.
+_CS_MAJOR_ONLY = {
+    "CS 240", "CS 241", "CS 245", "CS 246", "CS 251",
+    "CS 341", "CS 343", "CS 348", "CS 350", "CS 360", "CS 370",
+    "CS 442", "CS 446", "CS 451", "CS 454", "CS 459", "CS 466",
+    "CS 479", "CS 480", "CS 484", "CS 486", "CS 492", "CS 497",
+}
+_CS_PROGRAMS = ["Computer Science", "Data Science", "Software Eng"]
+for _row in MOCK_ROWS:
+    _cid = _row["course_id"]
+    if _cid in _CS_MAJOR_ONLY and not _row.get("restricted_to"):
+        _row["restricted_to"] = list(_CS_PROGRAMS)
+    # Math-faculty 300/400-level courses fill the "Math-3xx" requirement bucket
+    # (e.g. Mathematical Studies needs several MATH-faculty courses at 300+).
+    _subj, _, _num = _cid.partition(" ")
+    if _subj in {"MATH", "STAT", "CO", "AMATH", "PMATH", "ACTSC"} and _num[:1] in {"3", "4"}:
+        _cats = _row.setdefault("categories", [])
+        if "Math-3xx" not in _cats:
+            _cats.append("Math-3xx")
 
 # PD courses: co-op work terms only (units=0, not degree credit)
 for n in range(1, 7):

@@ -39,6 +39,17 @@ MAJORS: dict[str, dict[str, int]] = {
         "STAT-Core": 1,
         "Elective": 6,
     },
+    # Mathematical Studies (BMath). Distilled from the UW calendar
+    # (ucalendar: Mathematical Studies) — flexible plan, but it requires
+    # MATH-faculty depth at the 300/400 level ("Math-3xx"), which the generic
+    # Math-Major bucket doesn't capture.
+    "MathStudies-Major": {
+        "Math-Core": 7,
+        "Math-3xx": 4,
+        "CS-Core": 2,
+        "Comm": 1,
+        "Elective": 6,
+    },
     "DataScience-Major": {
         "CS-Core": 5,
         "Math-Core": 3,
@@ -49,14 +60,13 @@ MAJORS: dict[str, dict[str, int]] = {
         "Elective": 6,
     },
     "Eng-Generic": {
-        "CS-Core": 3,
+        "CS-Core": 2,   # CS-major core (240+) is CS-students-only; 135/136 are open
         "Math-Core": 4,
         "Comm": 1,
-        "CS-3xx": 1,
-        "Elective": 10,
+        "Elective": 11,  # CS-3xx removed: those are CS-students-only too
     },
     "Science-Generic": {
-        "CS-Core": 3,
+        "CS-Core": 2,   # CS-major core (240+) is CS-students-only; 135/136 are open
         "Math-Core": 3,
         "Comm": 1,
         "STAT-Core": 1,
