@@ -4,11 +4,16 @@
 
 Tell Schedugoose what career you're aiming for and how you like your terms (light? intense? no 8:30 AMs?), and it builds you a conflict-free, program-compliant schedule from University of Waterloo course data — **term by term across your whole co-op sequence** — then explains *why* it picked what it picked, and re-plans the moment you change your mind.
 
+It works for **any year of student**: a brand-new first-year gets the standard 1A onward; a returning student can say *"I'm a 4th-year going into 4A"* and **upload their transcript** (PDF or text) — the plan starts at their actual term and skips everything already taken.
+
 <p>
+<a href="https://github.com/stevensun1005/Schedugoose/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/stevensun1005/Schedugoose/actions/workflows/ci.yml/badge.svg"></a>
 <img alt="Python" src="https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white">
 <img alt="LangGraph" src="https://img.shields.io/badge/LangGraph-orchestration-1C3C3C">
 <img alt="OR-Tools" src="https://img.shields.io/badge/OR--Tools-CP--SAT-EA4335">
 <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-async-009688?logo=fastapi&logoColor=white">
+<img alt="Tests" src="https://img.shields.io/badge/tests-164_passing-brightgreen">
+<img alt="Eval" src="https://img.shields.io/badge/eval-100%25_on_3_axes-brightgreen">
 <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
 </p>
 
@@ -85,18 +90,22 @@ what's missing:
 
 1. **Program** — "I'm a first-year CS student" → identifies your faculty
    (Math / Engineering / Science) and degree requirements.
-2. **Standing / transcript** — new first-year, or returning? If you've already
-   taken courses, paste them ("CS 135, MATH 135") and the plan skips them and
-   plans around what's left. Say nothing and you're treated as a **brand-new
-   first-year** — a clean schedule you can then edit.
+2. **Standing / transcript** — new first-year, or returning? Say *"I'm a 4th-year
+   student"* or *"going into 2B"* and the plan **starts at your actual term**,
+   not 1A. Paste the courses you've taken ("CS 135, MATH 135"), dump raw
+   transcript text (grades and headers are ignored), or hit **📎 and upload the
+   transcript PDF** — everything already taken is skipped. Say nothing and
+   you're treated as a **brand-new first-year** — a clean schedule you can then
+   edit.
 3. **Residency** — international or domestic (language / English rules).
 4. **Sequence / stream** — Math/CS offer **Regular** or one of **four co-op
    sequences** (Sequence 1–4, differing in when work terms fall; Seq 1 is the
    common pick — UW's actual entry sequences). Engineering is lockstep:
    **Stream 4** (earlier first work term) vs **Stream 8** (more time to settle
    in). Say "sequence 3" or "stream 8" and it's matched.
-5. **Start term** — e.g. "Fall 2026" or "Winter 2027" (your 1A); the whole
-   sequence is anchored to the season you give, interleaving co-op work terms.
+5. **Start term** — e.g. "Fall 2026" or "Winter 2027" (your 1A — or, for a
+   returning student, your *next* term); the whole sequence is anchored to the
+   season you give, interleaving co-op work terms.
 6. **Career + preferences** — *optional*. "aiming for data science, keep it
    light, no mornings". If you don't name a career, Schedugoose won't invent one
    — it plans a solid general foundation and asks if you want to set a direction.
@@ -109,25 +118,43 @@ each answered in place, never by re-dumping the whole schedule:
 
 | You say… | You get |
 |----------|---------|
-| "make 2A lighter", "no music in 1A", "swap CS 486 for CS 480" | a **revised** plan (re-solved) |
+| "make 2A lighter" / "make 4A heavier", "no music in 1A", "swap CS 486 for CS 480", "add PHIL 145 to 3B" | a **revised** plan (re-solved; a lighter term drops to ~4 courses, a heavier one absorbs the slack without ever overshooting the 20-credit target) |
+| "make 5A lighter" (no such term) | a **clarification** ("your plan runs 1A–4B"), not a silent re-dump |
 | "why CS 341 in 3A?", "explain my plan" | a grounded **explanation** |
-| "what is CS 246?", "prereqs for CS 486?", "CS 480 vs CS 486" | **course info** (title, prereqs, when it's normally taken, restrictions) |
-| "what courses for data science?" | **career advice** grounded in the real catalog |
-| "what do I need to graduate?", "standard first-year courses?" | **requirements** |
+| "what is CS 246?", "prereqs for CS 486?", "CS 480 vs CS 486" | **course info** for *any* UW subject (title, prereqs, usual term, restrictions) or a side-by-side **comparison**; a made-up code gets a polite "couldn't find it" |
+| "what courses for data science?" | **career advice** grounded in the real catalog, prereqs shown, degree-required basics excluded |
+| "what does the AI specialization require?", "mechatronics requirements?" | **requirements** quoted **verbatim from the UW academic calendar** (Kuali API), with a citation link — never LLM-paraphrased |
+| "im a 4th year student", "going into 2B" + pasted/uploaded transcript | a plan that **starts at your term** and skips completed courses |
 | "show my plan", "when do I graduate?", "when are my work terms?", "which term is hardest?", "what electives can I take?" | **plan facts** read straight from the plan (deterministic, no hallucination) |
 | "change my start to Winter 2027", "switch to sequence 2" | **profile change** → re-planned |
 | "start over" | a fresh session |
 | "hi" / "thanks" / "what's the weather?" | a friendly reply / a scope redirect |
 
-Advice is **grounded in the real catalog**: Schedugoose only references courses
-that exist (with their real titles), never claims you uploaded a plan, never
-invents a career you didn't state, and never recommends a course already in your
-schedule. The chat UI shows an AI badge per reply (understood / explained /
-rules-only).
-
 Each study term is an independent CP-SAT solve (conflict-free, within your
 course-load); prerequisites unlock as earlier terms complete; courses are steered
 toward unmet degree requirements and RAG career grounding.
+
+### Grounding discipline (why it doesn't hallucinate)
+
+Small models *will* invent course codes and titles if you let them narrate
+freely — "CS 442: Machine Learning" sounds plausible and is completely wrong.
+Schedugoose treats this as an architecture problem, not a prompt problem:
+
+- **The LLM never enumerates courses from its own knowledge.** The only
+  free-text LLM reply path is the revision acknowledgment ("removed MATH 239
+  from 2A — done"). Everything that lists courses is rendered from the plan
+  JSON, the real catalog, or a cited source.
+- **Requirements are returned verbatim.** Program/specialization requirements
+  come from the UW academic-calendar (Kuali) API and are quoted exactly, with a
+  link — never summarized by the model (summaries invent counts and codes).
+- **Facts stay exact through phrasing.** When the LLM does phrase an answer
+  (graduation date, workload), it phrases *around* deterministic facts computed
+  from the plan (`grounded_reply`), so numbers and codes can't drift.
+- **Recommendations carry their prerequisites** and never include courses your
+  degree already requires (you have to take those anyway) or courses already in
+  your plan.
+- The chat UI shows an AI badge per reply (understood / explained / rules-only),
+  so you can always see which layer produced the text.
 
 ---
 
@@ -198,7 +225,7 @@ Beyond the planner, the repo is built like a production GenAI service:
 | **Hybrid RAG** | `data/rag_store.py` fuses **BM25 (lexical)** + **dense embeddings (semantic)** via **Reciprocal Rank Fusion** — catches exact terms *and* paraphrases |
 | **Vector store** | MongoDB Atlas `$vectorSearch` when configured, else an in-repo cosine index; OpenAI embeddings with a deterministic local fallback so dev/CI runs offline |
 | **Agents & orchestration** | LangGraph multi-node agent (`gather → clarify → retrieve → plan_terms → solve → diagnose → explain`) with a functional fallback |
-| **APIs** | FastAPI `/plan`, `/health`, `/metrics` — GenAI model behind a clean HTTP surface |
+| **APIs** | FastAPI `/plan`, `/transcript` (PDF/text upload → completed courses), `/feedback`, `/health`, `/metrics` — GenAI model behind a clean HTTP surface |
 | **Observability** | `app/metrics.py` — request/latency counters, **LLM-usage vs rule-based fallback rate**, RAG-source mix; `/metrics` serves JSON or Prometheus |
 | **Semantic course search** | `data/vector_store.py` consumes the ETL store (load-or-build) — "which courses cover databases?" → CS 348, via hybrid dense + lexical search |
 | **Finetuning data** | `data/feedback.py` — the `/plan` route logs LLM turns and `/feedback` records 👍/👎; `scripts/export_sft.py` exports a **reward-filtered SFT dataset** (chat format) for LoRA/SFT |
@@ -431,8 +458,8 @@ schedugoose/
 ├── pyproject.toml
 ├── .env.example                # UW_API_KEY, GROQ_API_KEY, REDIS_URL, ...
 ├── app/
-│   ├── main.py                 # FastAPI entrypoint + chat UI
-│   ├── routes.py               # /plan + /health + /metrics
+│   ├── main.py                 # FastAPI entrypoint + chat UI (transcript 📎 upload)
+│   ├── routes.py               # /plan /transcript /feedback /health /metrics
 │   ├── metrics.py              # request/latency/LLM-usage observability
 │   └── sessions.py             # session memory (in-process / Redis)
 ├── agent/
@@ -475,7 +502,7 @@ schedugoose/
 │   └── run_eval.py
 ├── scripts/
 │   └── e2e_user_flow.py        # step-by-step replay of a real chat session
-└── tests/                      # scheduler + agent unit tests
+└── tests/                      # 164 deterministic tests (scheduler + agent + API)
 ```
 
 `scheduler/` is deliberately decoupled from the LLM so it can be unit-tested on
@@ -483,17 +510,18 @@ its own — the practical expression of "get the core working first."
 
 ---
 
-## Roadmap
+## Build phases (all shipped)
 
-| Phase | Deliverable |
-|-------|-------------|
-| **0** | Env + skeleton (FastAPI + LangGraph + Redis hello-world) |
-| **1 ⭐** | **OR core**: pull a term's data, normalize, conflict preprocessing, solve with a *hand-written* config, unit tests. Milestone: correct schedules with **no LLM involved** |
-| **2** | LLM semantic layer: NL → config via structured output |
-| **3** | RAG knowledge base: program reqs + career→course, relevance scoring |
-| **4** | LangGraph orchestration: clarify / diagnose edges, session memory |
-| **5** | Explanation layer + "change one sentence, re-plan" loop |
-| **6** | Eval harness |
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| **0** | Env + skeleton (FastAPI + LangGraph + Redis hello-world) | ✅ |
+| **1 ⭐** | **OR core**: pull a term's data, normalize, conflict preprocessing, solve with a *hand-written* config, unit tests. Milestone: correct schedules with **no LLM involved** | ✅ |
+| **2** | LLM semantic layer: NL → config via structured output | ✅ |
+| **3** | RAG knowledge base: program reqs + career→course, relevance scoring | ✅ |
+| **4** | LangGraph orchestration: clarify / diagnose edges, session memory | ✅ |
+| **5** | Explanation layer + "change one sentence, re-plan" loop | ✅ |
+| **6** | Eval harness (3 axes, CI quality gate) | ✅ |
+| **7** | Conversation layer: any-year students, transcript upload, course Q&A/comparison, per-term load, live-calendar requirements | ✅ |
 
 > **Golden rule: don't add the LLM until the Phase 1 core works.** Building the solver on top of LLM output instead of the reverse is painful to debug.
 
@@ -511,34 +539,12 @@ The harness runs fully offline (rule-based layers) so it is deterministic in CI;
 
 ---
 
-## Layout at a glance
-
-| Path | What |
-|------|------|
-| `scheduler/` | OR core: data model, conflict preprocessing, CP-SAT model, solve + infeasibility diagnosis (no LLM, unit-tested) |
-| `data/` | UW API + mock catalog, program reqs, sequences, **RAG store** (MongoDB vector + cosine fallback) |
-| `agent/` | LangGraph: gather → clarify → retrieve → plan_terms → build_model → solve → diagnose → explain; Groq understanding, advisory replies |
-| `app/` | FastAPI `/plan` + `/health` (exposes `graph_trace`, `rag_hits`), session memory, chat UI |
-| `eval/` | Plan checker, multi-turn cases, **LLM-as-judge** explanation faithfulness |
-| `scripts/` | `e2e_user_flow.py` — step-by-step replay of a real chat session |
-| `tests/` | Scheduler + agent unit tests |
-
----
-
-## Design rule
-
-The integer-programming core is the foundation: it's built and tested with mock
-data, fully decoupled from the LLM. The LLM only **translates** natural language
-into a structured solver config and **explains** the result — it never computes
-the schedule.
-
----
-
 ## Highlights
 
 - **LLM + integer programming, not LLM-as-everything.** An LLM semantic layer maps natural-language career goals into structured constraints; an OR-Tools CP-SAT scheduler produces conflict-free, program-compliant schedules optimizing career-relevance and workload objectives.
-- **Grounded, not hallucinated.** Course data comes from the official UW Open Data API; career→course recommendations are RAG-grounded in real program requirements, eliminating made-up course codes.
-- **Conversational and iterative.** LangGraph orchestrates multi-turn planning, infeasibility diagnosis, and millisecond re-optimization in response to plain-language edits ("make it lighter / no early mornings"), with schedule legality validated at ~100% by an automated constraint checker.
+- **Grounded, not hallucinated.** Course data comes from the official UW Open Data API, program requirements verbatim from the UW academic-calendar (Kuali) API, career→course recommendations RAG-grounded in real requirements — the LLM never enumerates courses from its own knowledge (see [Grounding discipline](#grounding-discipline-why-it-doesnt-hallucinate)).
+- **Conversational and iterative.** LangGraph orchestrates multi-turn planning, infeasibility diagnosis, and millisecond re-optimization in response to plain-language edits ("make it lighter / no early mornings"). Any year of student: "I'm a 4th-year going into 4A" + a transcript upload plans only what's left.
+- **Verified.** 164 deterministic tests and a 3-axis eval harness (plan correctness, intent mapping, explanation faithfulness) at 100%, run as a hard CI gate on every push.
 
 ---
 
