@@ -50,6 +50,30 @@ def help_text() -> str:
     )
 
 
+def wants_course_search(state: PlannerState) -> bool:
+    low = _low(state)
+    return any(p in low for p in (
+        "courses about", "courses on", "courses related to", "courses that cover",
+        "which courses cover", "find courses", "classes about", "courses in",
+        "courses for learning", "courses teaching",
+    ))
+
+
+def answer_course_search(state: PlannerState) -> str:
+    from data.vector_store import search
+
+    query = last_user_message(state)
+    hits = search(query, top_k=5)
+    if not hits:
+        return "I couldn't find matching courses. Try naming a topic like 'databases' or 'machine learning'."
+    lines = ["Courses that best match, by semantic search over the catalog:"]
+    for cid, text, score in hits:
+        title = text.split(" — ", 1)[-1].split(".")[0] if " — " in text else cid
+        lines.append(f"  • **{cid}** — {title}")
+    lines.append("Ask me to add one to a term, or 'what is <code>' for details.")
+    return "\n".join(lines)
+
+
 def is_smalltalk(state: PlannerState) -> bool:
     low = _low(state)
     return low in (

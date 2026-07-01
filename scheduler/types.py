@@ -103,6 +103,9 @@ class Course:
     title: str
     units: float
     prereqs: list[str] = field(default_factory=list)
+    # Mutually-exclusive courses (only one of a group counts / may be taken),
+    # e.g. STAT 206 vs STAT 230/240. Enforced in pre-filtering + the solver.
+    antireqs: list[str] = field(default_factory=list)
     sections: list[Section] = field(default_factory=list)
     career_relevance: float = 0.0   # 0-1, computed per target career
     easiness: float = 0.0           # 0-1, workload signal (higher = lighter)

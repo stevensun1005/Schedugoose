@@ -14,9 +14,10 @@ from agent.llm import llm_available, llm_mode_label, llm_model, llm_provider, ll
 from data.rag_store import rag_backend
 from data.uw_api import data_source, uw_api_status
 from data.term_codes import term_code_from_start
-from agent.state import PlannerState
+from agent.state import PlannerState, last_user_message
 from app import sessions
 from app.metrics import METRICS
+from data import feedback
 from data.program_reqs import list_programs
 
 router = APIRouter()
@@ -78,6 +79,28 @@ def health() -> dict:
     }
 
 
+class FeedbackRequest(BaseModel):
+    session_id: str
+    reward: int = Field(..., description="+1 (👍) or -1 (👎)")
+
+
+@router.post("/feedback")
+def feedback_endpoint(req: FeedbackRequest) -> dict:
+    """Record a thumbs rating on the last turn → labelled finetuning data."""
+
+    state = sessions.load(req.session_id)
+    messages = state.get("messages") or []
+    user = last_user_message(state)
+    assistant = next((m.get("content", "") for m in reversed(messages) if m.get("role") == "assistant"), "")
+    if user and assistant:
+        feedback.log_interaction(
+            system="schedugoose-turn", user=user, assistant=assistant,
+            reward=1 if req.reward >= 0 else -1, tags=["rated"],
+        )
+        METRICS.incr("feedback_positive_total" if req.reward >= 0 else "feedback_negative_total")
+    return {"ok": True}
+
+
 @router.get("/metrics")
 def metrics(format: str = "json"):
     """Observability endpoint: request/latency/LLM-usage/RAG metrics."""
@@ -135,6 +158,16 @@ def plan_endpoint(req: PlanRequest) -> PlanResponse:
         llm_parse_failed=bool(result.get("llm_parse_failed")),
         rag_source=(rag_hits[0].get("source") if rag_hits else None),
     )
+
+    # Collect LLM turns as future supervised-finetuning data (best-effort).
+    if result.get("used_llm") and result.get("explanation"):
+        u = (result.get("understanding") or {})
+        feedback.log_interaction(
+            system="schedugoose-turn",
+            user=req.message,
+            assistant=result.get("explanation", ""),
+            tags=[str(u.get("intent") or "")],
+        )
     _log.info(
         "plan session=%s intent_llm=%s replanned=%s has_plan=%s",
         session_id, result.get("llm_understood"), result.get("replanned"), bool(result.get("plan")),

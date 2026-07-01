@@ -51,6 +51,9 @@ _INDEX_HTML = """<!doctype html>
   .user { align-self:flex-end; background:#2a3340; }
   .bot { align-self:flex-start; background:var(--panel); border:1px solid #23262e; }
   .bot.err { background:#221518; border-color:#4a2d35; color:#f28b82; }
+  .fb { margin-top:8px; display:flex; gap:6px; font-size:12px; color:var(--muted); }
+  .fb button { background:#0f1218; border:1px solid #2a2e37; color:var(--text); border-radius:8px;
+               padding:2px 8px; font-size:13px; cursor:pointer; }
   .sched { margin-top:10px; border-top:1px solid #2a2e37; padding-top:10px; display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; }
   .term { background:#0f1218; border:1px solid #2a2e37; border-radius:10px; padding:8px 10px; }
   .term.work { background:#14110a; border-color:#3a3320; }
@@ -164,6 +167,22 @@ function renderAiBadge(bubbleEl, data) {
   bubbleEl.appendChild(badge);
 }
 
+function renderFeedback(bubbleEl) {
+  const bar = document.createElement('div');
+  bar.className = 'fb';
+  for (const [label, reward] of [['👍', 1], ['👎', -1]]) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = label;
+    b.onclick = () => {
+      fetch('/feedback', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ session_id: sessionId, reward }) }).catch(() => {});
+      bar.textContent = 'Thanks for the feedback!';
+    };
+    bar.appendChild(b);
+  }
+  bubbleEl.appendChild(bar);
+}
+
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = input.value.trim();
@@ -191,6 +210,7 @@ form.addEventListener('submit', async (e) => {
     thinking.textContent = data.explanation || '(no reply)';
     renderAiBadge(thinking, data);
     renderPlan(thinking, data.plan);
+    renderFeedback(thinking);
   } catch (err) {
     let msg;
     if (err.name === 'AbortError') {

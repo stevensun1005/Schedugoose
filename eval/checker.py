@@ -66,6 +66,7 @@ def verify_plan(plan: dict[str, Any], completed: set[str] | None = None, max_uni
     credit_ok = True
     prereq_ok = True
     no_dup = True
+    antireq_ok = True
     seen: set[str] = set()
 
     for term in plan.get("terms", []):
@@ -84,6 +85,9 @@ def verify_plan(plan: dict[str, Any], completed: set[str] | None = None, max_uni
             c = catalog.get(code)
             if c and not all(p in completed for p in c.prereqs):
                 prereq_ok = False
+            # No mutually-exclusive (antireq) course taken already or same term.
+            if c and any(a in seen or a in codes for a in c.antireqs):
+                antireq_ok = False
 
         # Rebuild chosen sections for conflict checking.
         picked_codes = {(s["course_id"], s["section_code"]) for s in term.get("sections", [])}
@@ -110,6 +114,7 @@ def verify_plan(plan: dict[str, Any], completed: set[str] | None = None, max_uni
         "credit_ok": credit_ok,
         "prereq_ok": prereq_ok,
         "no_duplicate_ok": no_dup,
+        "antireq_ok": antireq_ok,
         "requirements_ok": requirements_ok,
     }
     checks["all_ok"] = all(checks.values())

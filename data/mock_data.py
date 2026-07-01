@@ -32,6 +32,7 @@ class RawRow(TypedDict, total=False):
     prof_rating: float
     restricted_to: list[str]
     requirements_description: str
+    antireqs: list[str]
 
 
 _SLOTS: list[tuple[str, str, str]] = [
@@ -53,6 +54,7 @@ def _one(
     units: float = 0.5,
     restricted_to: list[str] | None = None,
     requirements_description: str = "",
+    antireqs: list[str] | None = None,
 ) -> RawRow:
     days, start, end = _SLOTS[slot % len(_SLOTS)]
     return RawRow(
@@ -64,6 +66,7 @@ def _one(
         easiness=easiness, prof_rating=prof_rating,
         restricted_to=restricted_to or [],
         requirements_description=requirements_description,
+        antireqs=antireqs or [],
     )
 
 
@@ -106,7 +109,8 @@ MOCK_ROWS: list[RawRow] = [
     _one("STAT 206", "Statistics for Software Engineering", 11, prereqs=["MATH 135"],
          categories=["STAT-Core", "STAT-2xx"],
          restricted_to=["Software Eng"],
-         requirements_description="Prereq: MATH 119 or 138; Software Eng students only."),
+         antireqs=["STAT 220", "STAT 230", "STAT 240"],
+         requirements_description="Prereq: MATH 119 or 138; Antireq: STAT 220, 230, 240; Software Eng students only."),
     _one("PSYCH 101", "Introduction to Psychology", 5, categories=["Elective"], easiness=0.85),
     _one("ARTS 130", "Introduction to Digital Media", 15, categories=["Elective"], easiness=0.84),
 

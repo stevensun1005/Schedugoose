@@ -91,6 +91,16 @@ def build_model(
             ct = m.Add(x[s1] + x[s2] <= 1)
             tags["conflicts"].append(ct)
 
+    # (H2b) Antirequisites: at most one of a mutually-exclusive course pair.
+    tags.setdefault("antireqs", [])
+    seen_pairs: set[frozenset[str]] = set()
+    for c in courses:
+        for a in c.antireqs:
+            pair = frozenset((c.course_id, a))
+            if a in y and len(pair) == 2 and pair not in seen_pairs:
+                seen_pairs.add(pair)
+                tags["antireqs"].append(m.Add(y[c.course_id] + y[a] <= 1))
+
     # (H3) Credit load (scaled by 10 to keep half-credit precision integral).
     load = sum(round(c.units * 10) * y[c.course_id] for c in courses)
     tags["credit"].append(m.Add(load >= round(config.min_units * 10)))

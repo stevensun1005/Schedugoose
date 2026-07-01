@@ -46,6 +46,19 @@ def expand_course_codes(text: str) -> list[str]:
     return out
 
 
+def antireqs_from_requirements(description: str | None) -> list[str]:
+    """Parse the ``Antireq:`` clause into course codes (mutually-exclusive)."""
+
+    if not description:
+        return []
+    m = re.search(r"antireq[a-z]*\s*:?\s*(.+)", description, flags=re.I)
+    if not m:
+        return []
+    # Antireqs run to the next section header or end of string.
+    body = re.split(r"\b(?:prereq|coreq)[a-z]*\s*:", m.group(1), flags=re.I)[0]
+    return expand_course_codes(body)
+
+
 def prereqs_from_requirements(description: str | None) -> list[str]:
     """Best-effort parse of UW prereq text (first OR-branch, AND within branch)."""
 

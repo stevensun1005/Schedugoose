@@ -126,7 +126,10 @@ def explain(state: PlannerState) -> dict[str, Any]:
     # smalltalk, off-topic) once a plan exists — deterministic facts, but phrased
     # by the LLM so every turn runs through it (facts stay exact).
     from agent.llm import grounded_reply
-    from agent.plan_qa import help_text, is_help_request, plan_qa_reply, wants_plan_summary
+    from agent.plan_qa import (
+        answer_course_search, help_text, is_help_request, plan_qa_reply,
+        wants_course_search, wants_plan_summary,
+    )
 
     def _grounded(text: str) -> dict[str, Any]:
         reply, used = grounded_reply(user_msg, text)
@@ -134,6 +137,10 @@ def explain(state: PlannerState) -> dict[str, Any]:
 
     if is_help_request(state):
         return _grounded(help_text())
+    # Semantic course search works in any state (uses the ETL vector store).
+    if wants_course_search(state) and not wants_course_lookup(state):
+        return {"explanation": answer_course_search(state),
+                "used_llm": bool(state.get("llm_understood")), "llm_explained": False}
     if plan:
         if wants_plan_summary(state):
             return {"explanation": _template_plan(intake, config, plan),

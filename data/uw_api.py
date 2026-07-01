@@ -12,7 +12,7 @@ from typing import Any
 
 import httpx
 
-from data.prereqs import prereqs_from_requirements
+from data.prereqs import antireqs_from_requirements, prereqs_from_requirements
 from data.restrictions import restriction_from_requirements
 from data.mock_data import MOCK_ROWS, RawRow
 from data.term_codes import term_code_from_start
@@ -63,11 +63,15 @@ def normalize_rows(rows: list[RawRow]) -> list[Course]:
             restricted = list(r.get("restricted_to", [])) or restriction_from_requirements(
                 r.get("requirements_description", "")
             )
+            antireqs = list(r.get("antireqs", [])) or antireqs_from_requirements(
+                r.get("requirements_description", "")
+            )
             course = Course(
                 course_id=cid,
                 title=r.get("title", cid),
                 units=float(r.get("units", 0.5)),
                 prereqs=list(r.get("prereqs", [])),
+                antireqs=antireqs,
                 categories=list(r.get("categories", [])),
                 easiness=float(r.get("easiness", 0.0)),
                 prof_rating=float(r.get("prof_rating", 0.0)),

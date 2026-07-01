@@ -200,7 +200,8 @@ Beyond the planner, the repo is built like a production GenAI service:
 | **Agents & orchestration** | LangGraph multi-node agent (`gather → clarify → retrieve → plan_terms → solve → diagnose → explain`) with a functional fallback |
 | **APIs** | FastAPI `/plan`, `/health`, `/metrics` — GenAI model behind a clean HTTP surface |
 | **Observability** | `app/metrics.py` — request/latency counters, **LLM-usage vs rule-based fallback rate**, RAG-source mix; `/metrics` serves JSON or Prometheus |
-| **Finetuning data** | `data/feedback.py` — logs turns to JSONL and exports a **reward-filtered SFT dataset** (chat format) for future LoRA/SFT |
+| **Semantic course search** | `data/vector_store.py` consumes the ETL store (load-or-build) — "which courses cover databases?" → CS 348, via hybrid dense + lexical search |
+| **Finetuning data** | `data/feedback.py` — the `/plan` route logs LLM turns and `/feedback` records 👍/👎; `scripts/export_sft.py` exports a **reward-filtered SFT dataset** (chat format) for LoRA/SFT |
 | **Containers** | `Dockerfile` (+ healthcheck) and `docker-compose.yml` (API + Redis + MongoDB) |
 | **CI/CD quality gate** | `.github/workflows/ci.yml` runs pytest **and the eval harness** on every push/PR (across Python 3.11/3.12) and builds the image — the OR core's 100% plan-correctness is a hard gate |
 
@@ -276,6 +277,8 @@ for each course c, for each component type t (LEC/TUT/LAB):
 for each (s, s') in Conflicts:
     x[s] + x[s'] ≤ 1
 ```
+
+**(H2b) Antirequisites** — mutually-exclusive courses (e.g. STAT 206 vs STAT 230/240) parsed from the `Antireq:` clause: at most one of a pair, `y[c] + y[c'] ≤ 1` (and dropped in pre-filtering if the antireq is already on the transcript).
 
 **(H3) Credit load**
 

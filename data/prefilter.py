@@ -51,6 +51,9 @@ def prefilter_candidates(
             continue  # work terms only take PD
         if study_term and not prereqs_met(c, completed):
             continue
+        # Antirequisite: can't take a course if a mutually-exclusive one is done.
+        if study_term and any(a in completed for a in c.antireqs):
+            continue
         sections = [
             s for s in c.sections
             if term is None or not s.term or s.term in ("ANY", term)
