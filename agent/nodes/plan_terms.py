@@ -44,6 +44,7 @@ def plan_terms(state: PlannerState) -> dict[str, Any]:
     )
     return {
         "plan": plan,
+        "replanned": True,
         "schedule": None,
         "infeasible": not plan.get("complete", False) and any(
             not t.get("courses") for t in plan.get("terms", [])

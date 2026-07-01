@@ -102,12 +102,26 @@ what's missing:
    like (or you can say "skip" and it picks easy ones). Then it plans every
    study term: 1A → 4B.
 
-After onboarding you can **revise** ("no music in 1A"), ask **career advice**
-("courses for data science?"), or **explain** the plan — without re-pasting the
-full schedule. Advice is **grounded in the real catalog**: Schedugoose only
-references courses that exist (with their real titles), never claims you uploaded
-a plan, and never recommends a course already in your schedule. The chat UI shows
-an AI badge per reply (understood / explained / rules-only).
+After onboarding, the chat handles the conversations a student actually has —
+each answered in place, never by re-dumping the whole schedule:
+
+| You say… | You get |
+|----------|---------|
+| "make 2A lighter", "no music in 1A", "swap CS 486 for CS 480" | a **revised** plan (re-solved) |
+| "why CS 341 in 3A?", "explain my plan" | a grounded **explanation** |
+| "what is CS 246?", "prereqs for CS 486?", "CS 480 vs CS 486" | **course info** (title, prereqs, when it's normally taken, restrictions) |
+| "what courses for data science?" | **career advice** grounded in the real catalog |
+| "what do I need to graduate?", "standard first-year courses?" | **requirements** |
+| "show my plan", "when do I graduate?", "when are my work terms?", "which term is hardest?", "what electives can I take?" | **plan facts** read straight from the plan (deterministic, no hallucination) |
+| "change my start to Winter 2027", "switch to sequence 2" | **profile change** → re-planned |
+| "start over" | a fresh session |
+| "hi" / "thanks" / "what's the weather?" | a friendly reply / a scope redirect |
+
+Advice is **grounded in the real catalog**: Schedugoose only references courses
+that exist (with their real titles), never claims you uploaded a plan, never
+invents a career you didn't state, and never recommends a course already in your
+schedule. The chat UI shows an AI badge per reply (understood / explained /
+rules-only).
 
 Each study term is an independent CP-SAT solve (conflict-free, within your
 course-load); prerequisites unlock as earlier terms complete; courses are steered
@@ -401,6 +415,7 @@ schedugoose/
 │   ├── semantic.py             # NL → solver config
 │   ├── planner.py              # term-by-term sequence solve
 │   ├── advisory.py / career.py / course_qa.py / requirements_qa.py
+│   ├── plan_qa.py              # help, plan facts, workload, reset, off-topic
 │   ├── llm.py                  # Groq-first LLM client (graceful degradation)
 │   └── nodes/
 │       ├── gather.py  retrieve.py  plan_terms.py
