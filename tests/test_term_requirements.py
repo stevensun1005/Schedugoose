@@ -148,3 +148,29 @@ def test_all_heavy_does_not_overshoot_degree() -> None:
     assert plan.get("total_courses", 0) <= 40, plan.get("total_courses")
     assert plan.get("total_units", 0) <= 20.0, plan.get("total_units")
     assert plan.get("complete") is True
+
+
+def test_parse_swap_for_with_switch() -> None:
+    from agent.semantic import rule_based_config
+
+    for msg in ("swap CS 486 for CS 480", "replace CS 486 with CS 480",
+                "switch out CS 486 for CS 480"):
+        cfg = rule_based_config(msg, "CS-Major", None)
+        assert "CS 486" in cfg["must_avoid"], msg
+        assert "CS 480" in cfg["must_include"], msg
+
+
+def test_plan_swap_removes_old_adds_new() -> None:
+    from agent.semantic import rule_based_config
+
+    intake = _sample_intake()
+    intake["career_goal"] = "ai"
+    base = plan_sequence(intake, rule_based_config("plan", "CS-Major", None), set(), "ai")
+    present = {c for t in base["terms"] for c in t.get("courses", [])}
+    assert "CS 486" in present, "fixture precondition: AI plan should include CS 486"
+
+    swapped = plan_sequence(
+        intake, rule_based_config("swap CS 486 for CS 492", "CS-Major", None), set(), "ai")
+    after = {c for t in swapped["terms"] for c in t.get("courses", [])}
+    assert "CS 486" not in after
+    assert "CS 492" in after

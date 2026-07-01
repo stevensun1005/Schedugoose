@@ -339,6 +339,18 @@ def rule_based_config(text: str, program: str, prev: dict[str, Any] | None = Non
     for code in avoid_codes:
         if code not in must_avoid:
             must_avoid.append(code)
+    # "swap CS 486 for CS 480" / "replace CS 486 with CS 480": drop old, add new.
+    for m in re.finditer(
+        r"(?:swap|replace|switch)(?:\s+out)?\s+([a-z]{2,4}\s?\d{3}[a-z]?)\s+"
+        r"(?:for|with|to)\s+([a-z]{2,4}\s?\d{3}[a-z]?)",
+        low,
+    ):
+        old = normalize_course_code(m.group(1))
+        new = normalize_course_code(m.group(2))
+        if old not in must_avoid:
+            must_avoid.append(old)
+        if new not in must_include and new not in avoid_codes:
+            must_include.append(new)
     _apply_subject_avoid(low, must_avoid)
     if include_trigger:
         for code in extract_course_codes(text):
