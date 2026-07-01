@@ -20,7 +20,7 @@ dependencies = [
     "pydantic>=2.6",
     "httpx>=0.27",
     "python-dotenv>=1.0",
-    "pypdf>=4.0",           # transcript upload (PDF -> text)
+    "pypdf[crypto]>=4.0",   # transcript upload (PDF -> text; crypto: Quest PDFs are AES-encrypted)
     "python-multipart>=0.0.9",  # FastAPI file uploads
 ]
 

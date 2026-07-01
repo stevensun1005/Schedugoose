@@ -49,3 +49,41 @@ def test_standing_regex_allows_words_between() -> None:
     assert parse_entering_term("im a 2A CS student") == "2A"
     assert parse_entering_term("4B engineering student") == "4B"
     assert parse_entering_term("make 2A lighter") is None
+
+
+def test_transcript_aes_encrypted_pdf() -> None:
+    # Quest transcripts are AES-encrypted with an empty user password —
+    # requires pypdf[crypto] and a decrypt("") call, not a "can't read" error.
+    import io
+
+    from pypdf import PdfReader, PdfWriter
+    from pypdf.generic import DictionaryObject
+
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=612, height=792)
+    # Minimal text content: a real course code on the page.
+    from pypdf.generic import DecodedStreamObject, NameObject
+
+    stream = DecodedStreamObject()
+    stream.set_data(b"BT /F1 12 Tf 40 700 Td (CS 135 CS 136 MATH 135) Tj ET")
+    page[NameObject("/Contents")] = writer._add_object(stream)
+    page[NameObject("/Resources")] = DictionaryObject({
+        NameObject("/Font"): DictionaryObject({
+            NameObject("/F1"): DictionaryObject({
+                NameObject("/Type"): NameObject("/Font"),
+                NameObject("/Subtype"): NameObject("/Type1"),
+                NameObject("/BaseFont"): NameObject("/Helvetica"),
+            })
+        })
+    })
+    writer.encrypt(user_password="", owner_password="uw", algorithm="AES-256")
+    buf = io.BytesIO()
+    writer.write(buf)
+
+    r = _client().post(
+        "/transcript",
+        files={"file": ("transcript.pdf", buf.getvalue(), "application/pdf")},
+    )
+    body = r.json()
+    assert body["ok"] is True, body
+    assert "CS 135" in body["courses"]

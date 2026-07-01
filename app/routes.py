@@ -121,8 +121,12 @@ async def transcript_endpoint(file: UploadFile) -> dict:
             from pypdf import PdfReader
 
             reader = PdfReader(io.BytesIO(raw))
+            if reader.is_encrypted:
+                # Quest transcripts are AES-encrypted with an empty user
+                # password (owner-locked for printing, readable by anyone).
+                reader.decrypt("")
             text = "\n".join((page.extract_text() or "") for page in reader.pages)
-        except Exception as exc:  # encrypted / scanned-image PDF etc.
+        except Exception as exc:  # password-protected / scanned-image PDF etc.
             _log.warning("transcript pdf extract failed: %s", exc)
             return {"ok": False, "courses": [],
                     "error": "Couldn't read that PDF — try copy-pasting the text instead."}
