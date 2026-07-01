@@ -154,15 +154,15 @@ def _parse_term_requirements(text: str, prev: dict[str, Any] | None) -> dict[str
             ]
             term_reqs["1A"].append(cat)
 
-    # Per-course: "CS 245 in 2A"
+    # Per-course: "CS 245 in 2A", "add PHIL 145 to 3B", "move CS 246 into 2A"
     for m in re.finditer(
-        r"([A-Za-z]{2,4}\s?[0-9]{3}[A-Za-z]?)\s+(?:in|for)\s+(1[AB]|2[AB]|3[AB]|4[AB])",
+        r"([A-Za-z]{2,4}\s?[0-9]{3}[A-Za-z]?)\s+(?:in|into|for|to)\s+(1[AB]|2[AB]|3[AB]|4[AB])",
         low,
     ):
         _add(m.group(2), m.group(1))
 
     # Shared term: "cs245 and 246 in 2a", "take CS 245, CS 246 for 2A"
-    slot_match = re.search(r"\b(?:in|for)\s+(1[AB]|2[AB]|3[AB]|4[AB])\b", text, re.I)
+    slot_match = re.search(r"\b(?:in|into|for|to)\s+(1[AB]|2[AB]|3[AB]|4[AB])\b", text, re.I)
     if slot_match:
         slot = slot_match.group(1).upper()
         chunk = text[: slot_match.start()]

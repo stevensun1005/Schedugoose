@@ -35,6 +35,23 @@ def test_plan_honors_2a_pins() -> None:
     assert "CS 246" in term_2a["courses"], term_2a["courses"]
 
 
+def test_parse_add_to_term_connectors() -> None:
+    # "add X to 3B" / "move X into 2A" — the "to"/"into" connectors must pin
+    # the course, same as "in"/"for". Regression: these were silently dropped.
+    cfg = rule_based_config("add PHIL 145 to 3B", "CS-Major", None)
+    assert cfg["term_requirements"].get("3B") == ["PHIL 145"], cfg["term_requirements"]
+    cfg = rule_based_config("move CS 246 into 2A", "CS-Major", None)
+    assert "CS 246" in cfg["term_requirements"].get("2A", []), cfg["term_requirements"]
+
+
+def test_plan_honors_add_to_term() -> None:
+    intake = _sample_intake()
+    config = rule_based_config("add PHIL 145 to 3B", "CS-Major", {})
+    plan = plan_sequence(intake, config, set(), "data science")
+    term_3b = next(t for t in plan["terms"] if t["label"] == "3B")
+    assert "PHIL 145" in term_3b["courses"], term_3b["courses"]
+
+
 def test_avoid_cs240_add_math237_in_2a() -> None:
     prev = {"term_requirements": {"2A": ["CS 245", "CS 246"]}}
     cfg = rule_based_config(
