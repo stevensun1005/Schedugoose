@@ -8,7 +8,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from agent.intake import apply_elective_inference, fill_intake_offline, is_complete, parse_standing
+from agent.intake import (
+    apply_elective_inference,
+    fill_intake_offline,
+    is_complete,
+    parse_entering_term,
+    parse_standing,
+)
 from agent.llm import llm_available
 from agent.revision import revision_delta
 from agent.semantic import to_config
@@ -93,6 +99,10 @@ def gather_constraints(state: PlannerState) -> dict[str, Any]:
         standing, completed_codes = parse_standing(text)
         if standing:
             intake["standing"] = standing
+        entering = parse_entering_term(text)
+        if entering:
+            intake["entering_term"] = entering
+            intake["standing"] = "returning"
         if completed_codes:
             intake["standing"] = "returning"
             prev_completed = list((state.get("profile") or {}).get("completed") or [])

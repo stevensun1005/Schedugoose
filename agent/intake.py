@@ -65,6 +65,27 @@ def parse_standing(text: str) -> tuple[str | None, list[str]]:
     return None, []
 
 
+import re as _re
+
+_ENTERING_RE = _re.compile(
+    r"(?:going into|entering|heading into|about to start|starting|begin(?:ning)?|"
+    r"i'?m in|i am in|now in|currently in|coming up on|into my)\s+(1[ab]|2[ab]|3[ab]|4[ab])\b",
+    _re.I,
+)
+_STANDING_RE = _re.compile(r"\b(1[ab]|2[ab]|3[ab]|4[ab])\s+(?:student|standing|term)\b", _re.I)
+
+
+def parse_entering_term(text: str) -> str | None:
+    """The academic term a returning student is entering, e.g. "going into 2B" -> "2B".
+
+    Used to start the plan at the student's current term instead of 1A. Returns
+    an upper-case slot label (``"2B"``) or None when no term is named.
+    """
+
+    m = _ENTERING_RE.search(text) or _STANDING_RE.search(text)
+    return m.group(1).upper() if m else None
+
+
 def _parse_elective_picks(text: str) -> list[str] | None:
     low = text.lower().strip()
     if any(k in low for k in ("skip", "no elective", "none", "don't care", "you pick", "surprise me")):

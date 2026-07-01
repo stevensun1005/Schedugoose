@@ -170,6 +170,26 @@ def plan_sequence(
 ) -> dict[str, Any]:
     seq: Sequence | None = get_sequence(intake.get("sequence"))
     start = intake.get("start_term") or {"season": "Fall", "year": 2026}
+
+    # Returning student entering mid-degree ("going into 2B"): start the plan at
+    # that term, not 1A. We re-anchor `start` to the virtual 1A term so the
+    # existing Fall-1A-anchored resolve_term keeps producing correct calendars,
+    # then skip the already-completed slots below. No entering_term → start_idx 0
+    # and start unchanged, so the new-student path is byte-identical.
+    start_idx = 0
+    entering = (intake.get("entering_term") or "").upper()
+    if seq is not None and entering:
+        from data.sequences import _CAL_SEASON, _abs_term
+
+        for i, s in enumerate(seq.slots):
+            if s.label.upper() == entering:
+                start_idx = i
+                offset = _abs_term(s.season, s.year_offset) - _abs_term("Fall", 0)
+                if offset:
+                    virt = _abs_term(start.get("season", "Fall"), start["year"]) - offset
+                    start = {"season": _CAL_SEASON[virt % 3], "year": virt // 3}
+                break
+
     base_cfg = dict(config or {})
     completed = set(completed or set())
     elective_picks = set(intake.get("elective_picks") or [])
@@ -188,7 +208,9 @@ def plan_sequence(
     if seq is None:
         return {"error": "unknown sequence", "terms": terms_out, "graph_trace": trace}
 
-    for slot in seq.slots:
+    for idx, slot in enumerate(seq.slots):
+        if idx < start_idx:
+            continue  # returning student already completed this term
         cal = resolve_term(start, slot.year_offset, slot.season)
 
         if slot.kind == "work":
