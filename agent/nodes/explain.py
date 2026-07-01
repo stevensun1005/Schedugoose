@@ -28,11 +28,6 @@ from agent.understand import (
 )
 from agent.state import PlannerState, last_user_message
 
-_SYSTEM = """You are Schedugoose, a UW course-planning assistant. The user may ask \
-what courses are required for a specialization — answer that directly first, then \
-briefly describe how the term-by-term plan helps. Reference only courses present \
-in the plan data. Be concise and friendly."""
-
 _REVISION_SYSTEM = """You are Schedugoose, a UW course-planning assistant.
 The user just asked to CHANGE their plan (swap/drop/add courses in specific terms).
 1. Acknowledge what they asked for FIRST (e.g. removed ENGL from 2A, added CS 246).
@@ -239,40 +234,47 @@ def explain(state: PlannerState) -> dict[str, Any]:
             }
         return {"explanation": "Tell me a bit more to get started."}
 
-    rag = state.get("rag_hits") or []
-    rag_note = ""
-    if rag:
-        rag_note = f"\nRAG grounding: {rag[0].get('career')} ({rag[0].get('source')}, score={rag[0].get('score')})."
-
-    llm_text = complete_text(
-        _REVISION_SYSTEM if wants_plan_revision(state) else _SYSTEM,
-        f"User message:\n{user_msg}\n\n"
-        f"Revision notes:\n{pin_note or '(none)'}\n\n"
-        f"Career goal: {intake.get('career_goal')}\n"
-        f"Plan summary:\n{compact_plan_summary(plan)}\n"
-        f"Preferences (term pins/avoid): {json.dumps({k: config.get(k) for k in ('term_requirements', 'term_avoid') if config.get(k)}, default=str)}\n"
-        f"{rag_note}",
-    )
-    if llm_text:
-        return {
-            "explanation": pin_note + req_block + llm_text,
-            "used_llm": True,
-            "llm_explained": True,
-        }
+    # A targeted revision → the constrained revision LLM (it only acknowledges the
+    # change + grounded note), with an advisory fallback. This is the ONLY
+    # free-text LLM path left in explain: the old general _SYSTEM narrative asked
+    # the model to enumerate a specialization's courses from its own knowledge,
+    # which a small model answers by inventing course codes/titles not in the plan.
     if wants_plan_revision(state):
+        rag = state.get("rag_hits") or []
+        rag_note = ""
+        if rag:
+            rag_note = f"\nRAG grounding: {rag[0].get('career')} ({rag[0].get('source')}, score={rag[0].get('score')})."
+        llm_text = complete_text(
+            _REVISION_SYSTEM,
+            f"User message:\n{user_msg}\n\n"
+            f"Revision notes:\n{pin_note or '(none)'}\n\n"
+            f"Career goal: {intake.get('career_goal')}\n"
+            f"Plan summary:\n{compact_plan_summary(plan)}\n"
+            f"Preferences (term pins/avoid): {json.dumps({k: config.get(k) for k in ('term_requirements', 'term_avoid') if config.get(k)}, default=str)}\n"
+            f"{rag_note}",
+        )
+        if llm_text:
+            return {"explanation": pin_note + req_block + llm_text,
+                    "used_llm": True, "llm_explained": True}
         reply, explained = advisory_reply(state)
         return {
             "explanation": pin_note + req_block + reply,
             "used_llm": explained or bool(state.get("llm_understood")),
             "llm_explained": explained,
         }
-    # Plan was just (re)built this turn → show the full term-by-term plan.
-    if state.get("replanned"):
+
+    # A full plan was just built this turn (a replan, or onboarding just finished)
+    # → render the grounded term-by-term template. Never the free-form narrative,
+    # which invents courses. `replanned` isn't always set on the onboarding-
+    # completion turn, so also key off the onboarding intent when a plan exists.
+    intent = (state.get("understanding") or {}).get("intent")
+    if state.get("replanned") or intent == "onboarding":
         return {
             "explanation": pin_note + req_block + _template_plan(intake, config, plan),
             "used_llm": bool(state.get("llm_understood")),
             "llm_explained": False,
         }
+
     # A plan already exists and this turn didn't change it — answer briefly
     # instead of re-dumping the whole schedule (which the UI already shows).
     # Requirements answers are cited facts (or already LLM-generated + grounded
