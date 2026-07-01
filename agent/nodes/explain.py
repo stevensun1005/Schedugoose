@@ -104,6 +104,32 @@ def _template_infeasible(state: PlannerState) -> str:
 
 from agent.revision import format_turn_revision_note
 
+import re as _re
+
+_TERM_TOKEN_RE = _re.compile(r"\b([1-9][AB])\b")
+
+
+def _invalid_term_reference(user_msg: str, plan: dict[str, Any]) -> str | None:
+    """A clarification if the message names a term the plan doesn't have.
+
+    Users sometimes say "make 5A lighter" for a program that only runs 1A–4B.
+    Such a token never matches the revision regexes, so the turn would silently
+    re-dump an unchanged plan. Detect it and clarify the valid range instead.
+    """
+
+    labels = [t.get("label") for t in plan.get("terms", []) if t.get("label")]
+    valid = {l.upper() for l in labels}
+    tokens = {m.group(1).upper() for m in _TERM_TOKEN_RE.finditer(user_msg)}
+    bad = [t for t in tokens if t not in valid]
+    if not bad:
+        return None
+    span = f"{labels[0]}–{labels[-1]}" if labels else "1A–4B"
+    which = ", ".join(sorted(bad))
+    return (
+        f"Your plan runs **{span}** — there's no **{which}** in it. "
+        "Tell me a term in that range (e.g. \"make 2A lighter\") and I'll update it."
+    )
+
 
 def explain(state: PlannerState) -> dict[str, Any]:
     intake = state.get("intake") or {}
@@ -127,6 +153,14 @@ def explain(state: PlannerState) -> dict[str, Any]:
         )
         answer, used_llm = answer_course_question(user_msg, facts)
         return {"explanation": answer, "used_llm": used_llm, "llm_explained": used_llm}
+
+    # A revision that names a term outside the plan's range ("make 5A lighter")
+    # would otherwise silently re-dump an unchanged plan. Clarify instead.
+    if plan:
+        bad_term = _invalid_term_reference(user_msg, plan)
+        if bad_term:
+            return {"explanation": bad_term,
+                    "used_llm": bool(state.get("llm_understood")), "llm_explained": False}
 
     # Help works in any state; plan facts (graduation, work terms, summary,
     # smalltalk, off-topic) once a plan exists — deterministic facts, but phrased

@@ -34,3 +34,17 @@ def test_format_must_avoid_without_wrong_slot() -> None:
     note = format_turn_revision_note(delta, plan)
     assert "MUSIC 116" in note
     assert "2A" not in note
+
+
+def test_invalid_term_reference_clarifies() -> None:
+    from agent.nodes.explain import _invalid_term_reference
+
+    plan = {"terms": [{"label": lbl} for lbl in
+                      ("1A", "1B", "2A", "2B", "3A", "3B", "4A", "4B")]}
+    # A term outside the plan's range → clarification, not a silent re-dump.
+    msg = _invalid_term_reference("make 5A lighter", plan)
+    assert msg and "5A" in msg and "1A" in msg and "4B" in msg
+    # Valid terms and term-less revisions must NOT trigger the clarification.
+    assert _invalid_term_reference("make 2A lighter", plan) is None
+    assert _invalid_term_reference("add PHIL 145 to 3B", plan) is None
+    assert _invalid_term_reference("make it lighter", plan) is None
