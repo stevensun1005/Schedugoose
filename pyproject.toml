@@ -20,6 +20,8 @@ dependencies = [
     "pydantic>=2.6",
     "httpx>=0.27",
     "python-dotenv>=1.0",
+    "pypdf>=4.0",           # transcript upload (PDF -> text)
+    "python-multipart>=0.0.9",  # FastAPI file uploads
 ]
 
 [project.optional-dependencies]

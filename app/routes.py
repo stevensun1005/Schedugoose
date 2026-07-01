@@ -6,7 +6,7 @@ import logging
 import os
 import uuid
 
-from fastapi import APIRouter
+from fastapi import APIRouter, UploadFile
 from pydantic import BaseModel, Field
 
 from agent.graph import plan
@@ -99,6 +99,42 @@ def feedback_endpoint(req: FeedbackRequest) -> dict:
         )
         METRICS.incr("feedback_positive_total" if req.reward >= 0 else "feedback_negative_total")
     return {"ok": True}
+
+
+@router.post("/transcript")
+async def transcript_endpoint(file: UploadFile) -> dict:
+    """UWFlow-style transcript upload: PDF or text file -> completed course codes.
+
+    Extraction only — the frontend feeds the codes back through the normal chat
+    flow so the LLM pipeline (standing, plan skip) handles them like a paste.
+    """
+
+    from agent.semantic import extract_course_codes
+
+    raw = await file.read()
+    name = (file.filename or "").lower()
+    text = ""
+    if name.endswith(".pdf") or raw[:5] == b"%PDF-":
+        try:
+            import io
+
+            from pypdf import PdfReader
+
+            reader = PdfReader(io.BytesIO(raw))
+            text = "\n".join((page.extract_text() or "") for page in reader.pages)
+        except Exception as exc:  # encrypted / scanned-image PDF etc.
+            _log.warning("transcript pdf extract failed: %s", exc)
+            return {"ok": False, "courses": [],
+                    "error": "Couldn't read that PDF — try copy-pasting the text instead."}
+    else:
+        text = raw.decode("utf-8", errors="ignore")
+
+    codes = extract_course_codes(text)
+    METRICS.incr("transcript_uploads_total")
+    if not codes:
+        return {"ok": False, "courses": [],
+                "error": "No course codes found in that file — try pasting the text into the chat."}
+    return {"ok": True, "courses": codes}
 
 
 @router.get("/metrics")

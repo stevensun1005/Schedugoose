@@ -67,6 +67,7 @@ _INDEX_HTML = """<!doctype html>
   input { flex:1; padding:12px 14px; border-radius:10px; border:1px solid #2a2e37; background:#0c0e12; color:var(--text); font-size:14px; }
   button { padding:12px 18px; border-radius:10px; border:none; background:var(--accent); color:#1a1a1a; font-weight:600; cursor:pointer; }
   button:disabled { opacity:.5; cursor:default; }
+  #upload { background:#0c0e12; border:1px solid #2a2e37; color:var(--text); font-size:16px; padding:12px 14px; }
   .ai-badge { margin-top:10px; font-size:11px; display:inline-flex; gap:6px; align-items:center;
               padding:4px 9px; border-radius:8px; line-height:1.3; }
   .ai-badge .dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
@@ -86,6 +87,8 @@ _INDEX_HTML = """<!doctype html>
 </header>
 <div id="chat"></div>
 <form id="f">
+  <input type="file" id="tfile" accept=".pdf,.txt,.csv,text/plain,application/pdf" style="display:none"/>
+  <button type="button" id="upload" title="Upload your transcript (PDF or text) — I'll detect your completed courses">&#128206;</button>
   <input id="m" autocomplete="off"
     placeholder="e.g. I'm a first-year CS student aiming for data science, keep it light"/>
   <button id="send" type="submit">Plan</button>
@@ -183,6 +186,30 @@ function renderFeedback(bubbleEl) {
   bubbleEl.appendChild(bar);
 }
 
+// Transcript upload (UWFlow-style): extract completed courses from a PDF/text
+// file, then send them through the normal chat flow so the LLM plans around them.
+const fileInput = document.getElementById('tfile');
+document.getElementById('upload').addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', async () => {
+  const file = fileInput.files[0];
+  fileInput.value = '';
+  if (!file) return;
+  const note = bubble('Reading your transcript (' + file.name + ')…', 'bot');
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch('/transcript', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Could not read that file.');
+    note.textContent = 'Found ' + data.courses.length + ' completed courses in your transcript.';
+    input.value = 'Here is my transcript — I have already completed: ' + data.courses.join(', ');
+    form.requestSubmit();
+  } catch (err) {
+    note.textContent = '⚠️ ' + err.message;
+    note.classList.add('err');
+  }
+});
+
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = input.value.trim();
@@ -234,7 +261,8 @@ form.addEventListener('submit', async (e) => {
 bubble("Hey! I'm Schedugoose — I help UW students plan courses term-by-term across co-op. "
      + "Tell me about yourself in plain language (program, goals, preferences). "
      + "Are you a brand-new first-year, or returning? If you've already taken courses, "
-     + "list them (e.g. CS 135, MATH 135) and I'll plan around them.", 'bot');
+     + "list them (e.g. CS 135, MATH 135) or upload your transcript with \\uD83D\\uDCCE and "
+     + "I'll plan around them.", 'bot');
 
 fetch('/health').then(r => r.json()).then(h => {
   const el = document.getElementById('llm-status');

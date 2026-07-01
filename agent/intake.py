@@ -72,7 +72,10 @@ _ENTERING_RE = _re.compile(
     r"i'?m in|i am in|now in|currently in|coming up on|into my)\s+(1[ab]|2[ab]|3[ab]|4[ab])\b",
     _re.I,
 )
-_STANDING_RE = _re.compile(r"\b(1[ab]|2[ab]|3[ab]|4[ab])\s+(?:student|standing|term)\b", _re.I)
+# Allow a couple of words between the slot and the noun: "2A CS student".
+_STANDING_RE = _re.compile(
+    r"\b(1[ab]|2[ab]|3[ab]|4[ab])\s+(?:\w+\s+){0,2}(?:student|standing|term)\b", _re.I
+)
 # Ordinal year → the A term of that year ("4th year" -> "4A"). We default to the
 # first half; the student can say "4B" to refine.
 _YEAR_ORDINAL_RE = _re.compile(
