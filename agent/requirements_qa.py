@@ -139,22 +139,37 @@ Be concise; do not fabricate course codes."""
 
 
 def answer_program_requirements(text: str) -> str | None:
-    """Scalable path: retrieve UW calendar context for ANY program → LLM answer.
+    """Scalable path for ANY program — requirements are fetched, never hardcoded.
 
-    Requirements are never hardcoded here — they are fetched from the official UW
-    calendar and grounded at query time, then cited.
+    1. Kuali academic-calendar API → the program's *authoritative* requirement
+       text (registrar source), LLM-summarized and cited.
+    2. Fallback: RAG over the UW calendar course pages.
+    3. Fallback: point to the official catalog page.
     """
 
     from agent.llm import complete_text, llm_available
     from data.calendar import calendar_link, subjects_for_program
+    from data.kuali import requirements_for
     from data.requirements_rag import retrieve_program_requirements
+
+    # (1) Authoritative program requirements from the UW academic calendar.
+    # Returned VERBATIM (never LLM-rewritten): requirements must be exact, and a
+    # small model will otherwise invent course codes not in the source.
+    kuali = requirements_for(text)
+    if kuali:
+        title, reqs, url = kuali
+        body = reqs[:1600].rstrip()
+        return (
+            f"**{title}** — official UW academic-calendar requirements:\n\n{body}\n\n"
+            f"Full, current details (authoritative): {url}"
+        )
 
     if not subjects_for_program(text):
         return None  # not a recognizable program → let other handlers try
 
+    # (2) Course-page RAG fallback.
     context, urls = retrieve_program_requirements(text)
     link = urls[0] if urls else calendar_link(text)
-
     if context and llm_available():
         answer = complete_text(
             _RAG_SYSTEM,
@@ -163,7 +178,7 @@ def answer_program_requirements(text: str) -> str | None:
         if answer:
             return f"{answer.strip()}\n\nAuthoritative plan requirements: {link}"
 
-    # Offline / no fetch: point to the authoritative source rather than guess.
+    # (3) Point to the authoritative source rather than guess.
     return (
         "I look program requirements up from the official UW calendar rather than a "
         f"fixed list, so they stay current for any program. Here's the authoritative "

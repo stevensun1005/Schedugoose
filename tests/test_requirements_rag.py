@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-import agent.requirements_qa as rq
 from agent.requirements_qa import answer_program_requirements, is_requirements_question
 from data.calendar import subjects_for_program
 from data.requirements_rag import retrieve_program_requirements
+
+# Kuali is stubbed to None by the global conftest fixture; individual tests
+# override data.kuali.requirements_for to simulate an authoritative hit.
 
 
 def test_program_maps_to_subjects_not_hardcoded_requirements():
@@ -49,3 +51,28 @@ def test_requirements_question_detects_any_program():
 def test_retrieve_returns_empty_without_subject():
     ctx, urls = retrieve_program_requirements("i like turtles")
     assert ctx == "" and urls == []
+
+
+def test_kuali_authoritative_path(monkeypatch):
+    # When the academic-calendar API returns real requirements, use + cite them.
+    url = "https://uwaterloo.ca/academic-calendar/undergraduate-studies/catalog#/programs/abc"
+    monkeypatch.setattr(
+        "data.kuali.requirements_for",
+        lambda q: ("Mechatronics Engineering (BASc - Honours)", "Complete all: MTE 120, MTE 140.", url),
+    )
+    import agent.llm
+    monkeypatch.setattr(agent.llm, "llm_available", lambda: True)
+    monkeypatch.setattr(agent.llm, "complete_text", lambda s, u: "You take MTE 120 and MTE 140.")
+    ans = answer_program_requirements("requirements for mechatronics engineering")
+    assert "MTE 120" in ans and url in ans
+
+
+def test_kuali_offline_returns_raw_requirements(monkeypatch):
+    url = "https://uwaterloo.ca/academic-calendar/undergraduate-studies/catalog#/programs/abc"
+    monkeypatch.setattr(
+        "data.kuali.requirements_for",
+        lambda q: ("Economics Minor", "Complete all: ECON 101, ECON 102.", url),
+    )
+    # llm_available is False by default (conftest clears keys) → raw text + link.
+    ans = answer_program_requirements("economics minor requirements")
+    assert "ECON 101" in ans and url in ans

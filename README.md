@@ -164,7 +164,7 @@ same edges functionally, so the agent runs with or without LangGraph installed.
 | Data | Source | Compliance |
 |------|--------|------------|
 | Courses, sections, times, instructors, capacity | **UW Open Data API v3** (official, API key) with bundled **mock catalog fallback** | Authoritative — no scraping required |
-| **Any program's requirements** (Engineering, Science, Health, Econ, …) | Fetched **on demand** from the UW undergraduate calendar and answered via RAG — not hardcoded (`data/calendar.py`, `data/requirements_rag.py`) | Public |
+| **Any program's requirements** (Engineering, Science, Health, Econ, …) | Fetched **on demand** from the UW academic-calendar **Kuali API** (`data/kuali.py`) for authoritative "Complete N of…" requirements, with a course-page RAG fallback (`data/calendar.py`, `data/requirements_rag.py`) — not hardcoded | Public |
 | CS majors / all 8 CS specializations / minors | Curated + source-cited (`data/degree_requirements.py`) — verified fast path for the common case | Public |
 | **Standard first-year courses + recommended timelines** | UW advising pages (curated, with source links) | Public |
 | Career → skills → courses mapping | Self-built knowledge base (RAG) | Owned |
@@ -460,6 +460,7 @@ schedugoose/
 │   ├── feedback.py             # interaction logging → SFT dataset export
 │   ├── rag_store.py            # hybrid RAG (BM25 + dense + RRF; Mongo vector)
 │   ├── degree_plans.py  program_reqs.py  sequences.py  electives.py
+│   ├── kuali.py                # UW academic-calendar (Kuali) API — authoritative reqs
 │   ├── calendar.py             # on-demand UW calendar fetch (any subject)
 │   ├── requirements_rag.py     # retrieve program requirements from UW (RAG)
 │   ├── degree_requirements.py  # curated CS majors/minors/specializations (cited)
