@@ -259,7 +259,10 @@ def plan_sequence(
             credit["max"] = min(float(credit.get("max", _DEFAULT_MAX_UNITS)), 2.0)
             credit["min"] = min(float(credit.get("min", _DEFAULT_MIN_UNITS)), 1.5)
         elif load_intent == "heavy":
-            credit["max"] = max(float(credit.get("max", _DEFAULT_MAX_UNITS)), 3.0)
+            # Allow up to 6 courses, but never more than the degree still needs —
+            # a heavier term must not overshoot the 20-credit graduation target.
+            ceiling = 3.0 if remaining_credits <= 0 else min(3.0, remaining_credits)
+            credit["max"] = max(float(credit.get("max", _DEFAULT_MAX_UNITS)), ceiling)
         cfg_data["credit_load"] = credit
         cfg_data["weights"] = dict(cfg_data.get("weights") or {})
         if sum(remaining.get(k, 0) for k in ("CS-Core", "Math-Core")) > 0:

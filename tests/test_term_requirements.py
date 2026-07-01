@@ -134,3 +134,17 @@ def test_plan_heavier_term_offsets_lighter() -> None:
     plan = plan_sequence(intake, cfg, set(), "ds")
     # Shifting load between terms keeps the degree complete.
     assert plan.get("complete") is True, plan.get("total_courses")
+
+
+def test_all_heavy_does_not_overshoot_degree() -> None:
+    from agent.semantic import rule_based_config
+
+    intake = _sample_intake()
+    cfg = None
+    for t in ("1A", "1B", "2A", "2B", "3A", "3B", "4A", "4B"):
+        cfg = rule_based_config(f"make {t} heavier", "CS-Major", cfg)
+    plan = plan_sequence(intake, cfg, set(), "ds")
+    # Heavier terms must never push past the 40-course / 20-credit target.
+    assert plan.get("total_courses", 0) <= 40, plan.get("total_courses")
+    assert plan.get("total_units", 0) <= 20.0, plan.get("total_units")
+    assert plan.get("complete") is True
