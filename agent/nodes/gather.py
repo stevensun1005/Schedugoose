@@ -147,9 +147,12 @@ def gather_constraints(state: PlannerState) -> dict[str, Any]:
             existing = list(intake.get("elective_picks") or [])
             intake["elective_picks"] = list(dict.fromkeys(existing + confident))
 
-    if not intake.get("career_goal") and all(
-        intake.get(k) for k in ("program", "residency", "sequence", "start_term")
-    ):
+    needed_for_default = ("program", "residency", "sequence", "start_term")
+    if intake.get("transcript_uploaded") or intake.get("entering_term") not in (None, "", "1A", "1B"):
+        # Residency is skipped mid-degree — don't let it block the no-career default
+        # (otherwise career_goal falls back to the raw message text downstream).
+        needed_for_default = ("program", "sequence", "start_term")
+    if not intake.get("career_goal") and all(intake.get(k) for k in needed_for_default):
         intake["career_goal"] = "exploring options"
 
     complete = is_complete(intake, config)

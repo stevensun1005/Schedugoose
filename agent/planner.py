@@ -36,11 +36,27 @@ _DEFAULT_MIN_UNITS = 2.0
 _DEFAULT_MAX_UNITS = 2.5
 
 
+_COMM_SUBJECTS = {"ENGL", "COMMST", "SPCOM", "EMLS"}
+
+
 def _remaining_reqs(reqs: dict[str, int], catalog: list[Course], completed: set[str]) -> dict[str, int]:
     completed_courses = [c for c in catalog if c.course_id in completed]
+    # A returning student's transcript includes courses outside our catalog
+    # (other faculties, WLU cross-registrations). They still earned credit:
+    # count communication subjects toward Comm and the rest toward Elective,
+    # instead of demanding those categories be re-taken.
+    known = {c.course_id for c in completed_courses}
+    unknown = [cid for cid in completed if cid not in known]
+    unknown_comm = sum(1 for cid in unknown if cid.split()[0] in _COMM_SUBJECTS)
+    unknown_elective = len(unknown) - unknown_comm
+
     remaining: dict[str, int] = {}
     for category, required in reqs.items():
         done = sum(1 for c in completed_courses if category in c.categories)
+        if category == "Comm":
+            done += unknown_comm
+        elif category == "Elective":
+            done += unknown_elective
         rem = max(0, int(required) - done)
         if rem > 0:
             remaining[category] = rem
@@ -200,6 +216,14 @@ def plan_sequence(
     degree_plan = plan_from_intake(intake)
     degree_reqs = resolve_requirements(degree_plan)
     remaining = _remaining_reqs(degree_reqs, catalog, completed)
+
+    # A transcript reports true cumulative earned credits; most of a returning
+    # student's courses (other faculties, WLU, …) aren't in our catalog, so
+    # _units_so_far undercounts. Carry the difference as a fixed baseline.
+    units_extra = 0.0
+    reported = float(intake.get("units_earned") or 0)
+    if reported:
+        units_extra = max(0.0, round(reported - _units_so_far(catalog, completed), 2))
     min_easy = int(base_cfg.get("min_easy_courses", 0))
     _apply_program_template(intake, base_cfg, {c.course_id for c in catalog})
     _apply_residency_language(intake, base_cfg)
@@ -249,7 +273,7 @@ def plan_sequence(
             })
             continue
 
-        units_done = _units_so_far(catalog, completed)
+        units_done = _units_so_far(catalog, completed) + units_extra
         remaining_credits = round(MIN_DEGREE_UNITS - units_done, 2)
 
         # Returning students may already satisfy the degree before the sequence
@@ -271,10 +295,19 @@ def plan_sequence(
         cfg_data = dict(base_cfg)
         credit = dict(cfg_data.get("credit_load") or {})
         if units_done < MIN_DEGREE_UNITS:
-            # Cap the final term so completed credits aren't double-counted past 20.
-            cap = min(2.5, remaining_credits)
+            # Cap the final term so completed credits aren't double-counted past
+            # 20. Courses are 0.5-credit, so round the cap UP to that grain —
+            # needing 0.75 means two courses (1.0), not an unreachable 0.75
+            # (which the solver relaxes down to 0.5, leaving the degree short).
+            import math
+
+            cap = min(2.5, math.ceil(remaining_credits / 0.5) * 0.5)
             credit["min"] = cap
-            credit["max"] = cap
+            # Unmet requirement categories trump the credit cap: UW needs both
+            # the credit total AND the categories — allow exactly as much room
+            # as the outstanding requirements demand, never a blanket full term.
+            req_units = 0.5 * sum(remaining.values())
+            credit["max"] = min(2.5, max(cap, req_units))
         # Per-term "make 2A lighter/heavier" — shift this term's credit target.
         load_intent = (base_cfg.get("term_load") or {}).get(slot.label)
         if load_intent == "light":
@@ -333,7 +366,7 @@ def plan_sequence(
                 if remaining[cat] == 0:
                     del remaining[cat]
             sched = res.as_dict()
-            units = _units_so_far(catalog, completed)
+            units = _units_so_far(catalog, completed) + units_extra
             terms_out.append({
                 "label": slot.label, "kind": "study",
                 "season": cal["season"], "year": cal["year"], "display": format_term(cal),
@@ -350,7 +383,7 @@ def plan_sequence(
                 "note": "Couldn't build a valid term here.",
             })
 
-    total_units = _units_so_far(catalog, completed)
+    total_units = _units_so_far(catalog, completed) + units_extra
     total_courses = sum(
         len(t["courses"]) for t in terms_out
         if t["kind"] == "study" and t.get("courses")

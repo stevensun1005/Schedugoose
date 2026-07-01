@@ -240,13 +240,22 @@ def needs_elective_pick(intake: Intake, config: dict[str, Any] | None) -> bool:
 
 
 def is_complete(intake: Intake, config: dict[str, Any] | None = None) -> bool:
-    base = all(intake.get(k) for k in ("program", "residency", "sequence", "start_term", "career_goal"))
+    needed = ["program", "residency", "sequence", "start_term", "career_goal"]
+    # Residency only drives the 1A language pin — irrelevant mid-degree.
+    if intake.get("entering_term") not in (None, "", "1A", "1B"):
+        needed.remove("residency")
+    # A transcript answers everything it can; don't block the plan on a career
+    # question — plan the general foundation and invite a direction after.
+    if intake.get("transcript_uploaded"):
+        needed.remove("career_goal")
+    base = all(intake.get(k) for k in needed)
     return base and not needs_elective_pick(intake, config)
 
 
 def next_question(intake: Intake, config: dict[str, Any] | None = None) -> str:
     returning = intake.get("standing") == "returning" or intake.get("entering_term")
     entering = intake.get("entering_term")
+    mid_degree = entering not in (None, "", "1A", "1B")
     if not intake.get("program"):
         return "What program are you in?"
     # A returning student's transcript is the highest-value thing to collect: it
@@ -258,7 +267,7 @@ def next_question(intake: Intake, config: dict[str, Any] | None = None) -> str:
             "(or your transcript text) so I skip them — e.g. \"CS 135, CS 136, "
             "MATH 135, MATH 137, ...\". You can also say 'skip' to plan the standard sequence."
         )
-    if not intake.get("residency"):
+    if not intake.get("residency") and not mid_degree:
         return "Are you an international student? (yes/no)"
     if not intake.get("sequence"):
         fac = intake.get("faculty")
@@ -277,7 +286,7 @@ def next_question(intake: Intake, config: dict[str, Any] | None = None) -> str:
         if entering and entering != "1A":
             return f"When does your next term ({entering}) start? e.g. Fall 2026"
         return "Which term do you start (your 1A)? e.g. Fall 2026"
-    if not intake.get("career_goal"):
+    if not intake.get("career_goal") and not intake.get("transcript_uploaded"):
         return "What career or field are you aiming for?"
     if needs_elective_pick(intake, config):
         return (

@@ -103,6 +103,7 @@ const btn = document.getElementById('send');
 // First-year by default (empty transcript). Returning students could pass
 // their completed courses here.
 const profile = { completed: [] };
+let pendingTranscript = null;   // parsed transcript to send with the next /plan
 
 function bubble(text, who) {
   const d = document.createElement('div');
@@ -202,17 +203,18 @@ fileInput.addEventListener('change', async () => {
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'Could not read that file.');
     let noteText = 'Found ' + data.courses.length + ' courses in your transcript';
+    if (data.program) noteText += ' — ' + data.program + (data.level ? ', ' + data.level : '');
     if (data.in_progress && data.in_progress.length)
       noteText += ' (' + data.in_progress.length + ' in progress)';
     if (data.failed && data.failed.length)
       noteText += '. Excluded failed attempts: ' + data.failed.join(', ');
     note.textContent = noteText + '.';
-    // Failed codes stay OUT of the message so they aren't claimed as completed.
-    let msg = 'Here is my transcript — ';
-    if (data.program) msg += "I'm in " + data.program + ', ';
-    if (data.level) msg += 'currently in my ' + data.level + ' term. ';
-    msg += 'I have already completed or am currently taking: ' + data.courses.join(', ');
-    input.value = msg;
+    // The parsed transcript rides along on the request and pre-fills the whole
+    // intake server-side (program, level, next term, completed) — no wall of
+    // codes in the chat, no re-asking questions the transcript answers.
+    pendingTranscript = data;
+    profile.completed = data.courses;
+    input.value = 'Here is my transcript — plan my remaining terms.';
     form.requestSubmit();
   } catch (err) {
     note.textContent = '⚠️ ' + err.message;
@@ -232,9 +234,11 @@ form.addEventListener('submit', async (e) => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 120000);
   try {
+    const body = { message:text, session_id:sessionId, profile };
+    if (pendingTranscript) { body.transcript = pendingTranscript; pendingTranscript = null; }
     const res = await fetch('/plan', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ message:text, session_id:sessionId, profile }),
+      body: JSON.stringify(body),
       signal: controller.signal
     });
     if (!res.ok) {

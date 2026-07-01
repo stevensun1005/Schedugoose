@@ -32,6 +32,50 @@ class PlanRequest(BaseModel):
     message: str = Field(..., description="Natural-language request")
     session_id: str | None = Field(None, description="Omit to start a new session")
     profile: ProfileIn | None = None
+    transcript: dict | None = Field(
+        None, description="Parsed transcript from /transcript — pre-fills the whole intake"
+    )
+
+
+def _apply_transcript(state: PlannerState, t: dict) -> None:
+    """Deterministically fill intake from a parsed transcript.
+
+    The transcript already answers program, standing, level, next term and
+    sequence — the student should not be asked for any of it again.
+    """
+
+    from data.sequences import identify_program
+
+    intake = dict(state.get("intake") or {})
+    courses = list(t.get("completed") or []) + list(t.get("in_progress") or [])
+    if courses:
+        prev = list(intake.get("completed") or [])
+        intake["completed"] = list(dict.fromkeys(prev + courses))
+        profile = dict(state.get("profile") or {})
+        profile["completed"] = intake["completed"]
+        state["profile"] = profile
+    intake["standing"] = "returning"
+    intake["transcript_uploaded"] = True
+    if t.get("level"):
+        intake["entering_term"] = t["level"]
+    prog = identify_program(t.get("program") or "")
+    if prog and not intake.get("program"):
+        intake["program"] = prog.name
+        intake["faculty"] = prog.faculty
+        intake["reqs_key"] = prog.reqs_key
+    if t.get("next_term") and not intake.get("start_term"):
+        intake["start_term"] = t["next_term"]
+    if not intake.get("sequence") and (prog or intake.get("faculty")):
+        fac = intake.get("faculty")
+        if fac == "Math":
+            intake["sequence"] = "math-coop" if t.get("coop") else "math-regular"
+        elif fac == "Engineering":
+            intake["sequence"] = "eng-stream-4"
+        elif fac:
+            intake["sequence"] = "sci-regular"
+    if t.get("units_earned"):
+        intake["units_earned"] = float(t["units_earned"])
+    state["intake"] = intake
 
 
 class PlanResponse(BaseModel):
@@ -186,9 +230,11 @@ def plan_endpoint(req: PlanRequest) -> PlanResponse:
     state.setdefault("messages", [])
     state["messages"].append({"role": "user", "content": req.message})
 
-    if req.profile is not None:
+    if req.profile is not None and (req.profile.completed or not state.get("profile")):
         state["profile"] = req.profile.model_dump(exclude_none=True)
     state.setdefault("profile", {"completed": []})
+    if req.transcript:
+        _apply_transcript(state, req.transcript)
 
     try:
         with METRICS.timer():

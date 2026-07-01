@@ -27,7 +27,12 @@ _ENTRY_RE = re.compile(r"\b([A-Z]{2,6})\s{1,4}(\d{2,3}[A-Z]?)(?![\d.])\b")
 _PAIR_RE = re.compile(r"(\d+\.\d{2})\s+(\d+\.\d{2})\s*(\S{1,3})?")
 _PROGRAM_RE = re.compile(r"Program:\s*(.+)")
 _LEVEL_RE = re.compile(r"Level:\s*(\d[AB])")
+_TERM_RE = re.compile(r"\b(Fall|Winter|Spring)\s+(20\d\d)\b")
+# "Cumulative Totals 20.50 17.25" -> (attempted, earned)
+_CUM_RE = re.compile(r"Cumulative Totals\s+([\d.]+)\s+([\d.]+)")
 _NON_SUBJECTS = {"GPA", "ID", "NBR"}
+
+_NEXT_SEASON = {"Winter": ("Spring", 0), "Spring": ("Fall", 0), "Fall": ("Winter", 1)}
 
 
 class TranscriptInfo(TypedDict):
@@ -36,6 +41,10 @@ class TranscriptInfo(TypedDict):
     in_progress: list[str]
     program: str | None
     level: str | None
+    last_term: dict | None      # the most recent enrolled term, e.g. Spring 2026
+    next_term: dict | None      # the term after it — where planning starts
+    coop: bool
+    units_earned: float | None  # cumulative earned + in-progress attempted
 
 
 def looks_like_transcript(text: str) -> bool:
@@ -79,11 +88,29 @@ def parse_transcript(text: str) -> TranscriptInfo:
         "in_progress": [c for c in order if state.get(c) == "in_progress"],
         "program": None,
         "level": None,
+        "last_term": None,
+        "next_term": None,
+        "coop": False,
+        "units_earned": None,
     }
     programs = _PROGRAM_RE.findall(text)
     if programs:
         out["program"] = programs[-1].strip()  # last = current program
+        out["coop"] = any("co-op" in p.lower() or "co-operative" in p.lower() for p in programs)
     levels = _LEVEL_RE.findall(text)
     if levels:
         out["level"] = levels[-1]
+
+    terms = _TERM_RE.findall(text)
+    if terms:
+        season, year = terms[-1][0], int(terms[-1][1])
+        out["last_term"] = {"season": season, "year": year}
+        nxt, bump = _NEXT_SEASON[season]
+        out["next_term"] = {"season": nxt, "year": year + bump}
+
+    cums = _CUM_RE.findall(text)
+    if cums:
+        earned = float(cums[-1][1])
+        # In-progress courses have no earned credit yet but will by next term.
+        out["units_earned"] = round(earned + 0.5 * len(out["in_progress"]), 2)
     return out
