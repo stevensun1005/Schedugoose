@@ -253,6 +253,13 @@ def plan_sequence(
             cap = min(2.5, remaining_credits)
             credit["min"] = cap
             credit["max"] = cap
+        # Per-term "make 2A lighter/heavier" — shift this term's credit target.
+        load_intent = (base_cfg.get("term_load") or {}).get(slot.label)
+        if load_intent == "light":
+            credit["max"] = min(float(credit.get("max", _DEFAULT_MAX_UNITS)), 2.0)
+            credit["min"] = min(float(credit.get("min", _DEFAULT_MIN_UNITS)), 1.5)
+        elif load_intent == "heavy":
+            credit["max"] = max(float(credit.get("max", _DEFAULT_MAX_UNITS)), 3.0)
         cfg_data["credit_load"] = credit
         cfg_data["weights"] = dict(cfg_data.get("weights") or {})
         if sum(remaining.get(k, 0) for k in ("CS-Core", "Math-Core")) > 0:

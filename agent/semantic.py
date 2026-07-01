@@ -229,6 +229,30 @@ def _parse_term_avoid(text: str, prev: dict[str, Any] | None) -> dict[str, list[
     return term_avoid
 
 
+def _parse_term_load(text: str, prev: dict[str, Any] | None) -> dict[str, str]:
+    """Per-term load intent, e.g. "make 2A lighter" -> {"2A": "light"}.
+
+    Only fires when a term token is present; a bare "make it lighter" is a
+    global intensity change handled elsewhere, not a per-term override.
+    """
+
+    low = text.lower()
+    term_load: dict[str, str] = dict((prev or {}).get("term_load") or {})
+    slot = r"(1[ab]|2[ab]|3[ab]|4[ab])"
+    word = r"(lighter|heavier|light|heavy)"
+
+    def _apply(s: str, w: str) -> None:
+        term_load[s.upper()] = "light" if w.startswith("light") else "heavy"
+
+    # "2a lighter", "make 2a heavier"
+    for m in re.finditer(rf"{slot}\D{{0,15}}{word}", low):
+        _apply(m.group(1), m.group(2))
+    # "lighter 2a", "heavier load in 3b"
+    for m in re.finditer(rf"{word}\D{{0,15}}{slot}", low):
+        _apply(m.group(2), m.group(1))
+    return term_load
+
+
 def _parse_term_replacements(text: str, term_reqs: dict[str, list[str]]) -> dict[str, list[str]]:
     """'want MATH 237 instead' → pin to the term mentioned earlier in the message."""
 
@@ -325,6 +349,7 @@ def rule_based_config(text: str, program: str, prev: dict[str, Any] | None = Non
     term_requirements = _parse_term_requirements(text, prev)
     term_requirements = _parse_term_replacements(text, term_requirements)
     term_avoid = _parse_term_avoid(text, prev)
+    term_load = _parse_term_load(text, prev)
 
     # Drop avoided courses from pins in the same term.
     for slot, avoid in term_avoid.items():
@@ -344,6 +369,7 @@ def rule_based_config(text: str, program: str, prev: dict[str, Any] | None = Non
         "min_easy_courses": min_easy,
         "term_requirements": term_requirements,
         "term_avoid": term_avoid,
+        "term_load": term_load,
     }
 
 

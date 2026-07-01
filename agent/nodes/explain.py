@@ -87,6 +87,13 @@ def _template_plan(intake: dict[str, Any], config: dict[str, Any], plan: dict[st
         if rem:
             need = ", ".join(f"{k} (+{v})" for k, v in rem.items())
             lines.append(f"Still to cover later: {need}.")
+        elif total_u is not None and total_u < target:
+            short = round(target - total_u, 2)
+            lines.append(
+                f"Heads up: this is {short} credit(s) below the {target}-credit "
+                "graduation target — lightening a term freed a slot with nowhere to "
+                "reflow it. Tell me to make another term heavier to make it up."
+            )
     trace = plan.get("graph_trace") or []
     if trace:
         lines.append(f"Agent pipeline ({len(trace)} steps): {' → '.join(trace[:6])}{'…' if len(trace) > 6 else ''}.")

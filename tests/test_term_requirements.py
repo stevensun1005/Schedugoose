@@ -101,3 +101,36 @@ def test_plan_swaps_out_cs240_for_math237() -> None:
     term_2a = next(t for t in plan["terms"] if t["label"] == "2A")
     assert "CS 240" not in term_2a["courses"], term_2a["courses"]
     assert "MATH 237" in term_2a["courses"], term_2a["courses"]
+
+
+def test_parse_per_term_load() -> None:
+    from agent.semantic import rule_based_config
+
+    assert rule_based_config("make 2A lighter", "CS-Major", None)["term_load"] == {"2A": "light"}
+    assert rule_based_config("2B heavier", "CS-Major", None)["term_load"] == {"2B": "heavy"}
+    # A term-less intensity change is NOT a per-term override.
+    assert rule_based_config("make it lighter", "CS-Major", None)["term_load"] == {}
+
+
+def test_plan_lighter_term_reduces_load() -> None:
+    from agent.semantic import rule_based_config
+
+    intake = _sample_intake()
+    base = plan_sequence(intake, rule_based_config("plan", "CS-Major", None), set(), "ds")
+    light = plan_sequence(intake, rule_based_config("make 2A lighter", "CS-Major", None), set(), "ds")
+
+    def count(plan: dict, label: str) -> int:
+        return len(next(t for t in plan["terms"] if t["label"] == label)["courses"])
+
+    assert count(light, "2A") < count(base, "2A"), (count(base, "2A"), count(light, "2A"))
+
+
+def test_plan_heavier_term_offsets_lighter() -> None:
+    from agent.semantic import rule_based_config
+
+    intake = _sample_intake()
+    cfg = rule_based_config("make 2A lighter", "CS-Major", None)
+    cfg = rule_based_config("make 4A heavier", "CS-Major", cfg)
+    plan = plan_sequence(intake, cfg, set(), "ds")
+    # Shifting load between terms keeps the degree complete.
+    assert plan.get("complete") is True, plan.get("total_courses")
