@@ -13,7 +13,9 @@ from agent.advisory import advisory_reply, compact_plan_summary
 from agent.converse import conversational_reply
 from agent.course_qa import (
     answer_course_question,
+    compare_courses,
     gather_course_facts,
+    is_comparison,
 )
 from agent.llm import complete_text
 from agent.requirements_qa import format_requirements_answer
@@ -113,6 +115,10 @@ def explain(state: PlannerState) -> dict[str, Any]:
         codes = course_codes_for_lookup(state)
         if not codes:
             return {"explanation": "Which course are you asking about? Give me a code like SOC 101."}
+        # "CS 486 vs CS 480" → compare all named courses, not just the first.
+        if len(codes) >= 2 and is_comparison(user_msg):
+            answer = compare_courses(codes, intake=intake, catalog=state.get("catalog"), plan=plan)
+            return {"explanation": answer, "used_llm": bool(state.get("llm_understood")), "llm_explained": False}
         facts = gather_course_facts(
             codes[0],
             intake=intake,

@@ -228,6 +228,41 @@ def _template_answer(facts: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def is_comparison(text: str) -> bool:
+    low = text.lower()
+    return any(w in low for w in (
+        " vs ", " vs.", "versus", "compare", "difference between",
+        "which is better", "which is easier", "which one",
+    ))
+
+
+def compare_courses(
+    codes: list[str], *, intake: dict[str, Any] | None = None,
+    catalog: list[Any] | None = None, plan: dict[str, Any] | None = None,
+) -> str:
+    """Side-by-side facts for two or more courses (title, prereqs, term, load)."""
+
+    lines = ["Here's how they compare:"]
+    for cid in codes[:3]:
+        facts = gather_course_facts(cid, intake=intake, catalog=catalog, plan=plan)
+        if _is_not_found(facts):
+            lines.append(f"  • **{cid}** — not found in the catalog.")
+            continue
+        bits: list[str] = []
+        if facts.get("prereqs"):
+            bits.append(f"prereq: {', '.join(facts['prereqs'])}")
+        if facts.get("recommended_term"):
+            bits.append(f"usually {facts['recommended_term']}")
+        if facts.get("plan_term"):
+            bits.append(f"in your plan: {facts['plan_term']}")
+        desc = (facts.get("description") or "").strip()
+        tail = f" — {desc[:110]}" if desc else ""
+        meta = f" ({'; '.join(bits)})" if bits else ""
+        lines.append(f"  • **{cid} — {facts.get('title', cid)}**{meta}{tail}")
+    lines.append("Tell me which to add (or to swap one for the other) and I'll update the plan.")
+    return "\n".join(lines)
+
+
 def answer_course_question(
     user_msg: str,
     facts: dict[str, Any],

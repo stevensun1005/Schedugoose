@@ -34,6 +34,15 @@ def test_confirmed_absent_course_flagged(monkeypatch):
     assert facts.get("found") is False
 
 
+def test_course_comparison_covers_both():
+    from agent.course_qa import compare_courses, is_comparison
+
+    assert is_comparison("CS 486 vs CS 480")
+    text = compare_courses(["CS 486", "CS 480"])
+    assert "CS 486" in text and "CS 480" in text
+    assert "prereq" in text.lower()  # each course lists its prerequisites
+
+
 def test_requirements_routing_beats_misclassified_intent():
     # Even if the LLM labels it career_advice, a specialization-requirements
     # question routes to the authoritative requirements answer.

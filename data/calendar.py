@@ -132,8 +132,13 @@ def course_blurb(course_id: str) -> tuple[str, str] | None:
     hit = pat.search(text)
     if not hit:
         return None
-    blurb = re.sub(r"\s+", " ", f"{subject} {num}{hit.group(1)}").strip()
-    return (blurb[:600], url) if len(blurb) > len(f"{subject} {num}") + 5 else None
+    body = hit.group(1)
+    # Drop the "<components> <units> Course ID: NNNNNN" boilerplate → title + desc.
+    after_id = re.search(r"Course ID:\s*\d+\s*(.*)", body, re.S)
+    core = re.sub(r"\s+", " ", (after_id.group(1) if after_id else body)).strip()
+    if len(core) < 6:
+        return None
+    return (f"{subject} {num} — {core[:500]}", url)
 
 
 def calendar_link(query: str) -> str:
