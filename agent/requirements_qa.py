@@ -83,7 +83,9 @@ def is_requirements_question(text: str) -> bool:
         return True
     if _wants_component_list(text) or _find_component_key({}, text):
         return True
-    topic = any(p in low for p in (
+    from data.calendar import subjects_for_program
+
+    topic = bool(subjects_for_program(text)) or any(p in low for p in (
         "specialization", "specialisation", "spec", "minor", "major", "degree", "graduate",
         "business", "ai ", "artificial intelligence", "bioinformatics", "game design",
         "digital hardware", "hci", "human-computer",
@@ -128,6 +130,48 @@ def _find_component_key(intake: dict, text: str) -> str | None:
     return None
 
 
+_RAG_SYSTEM = """You are a University of Waterloo course-planning advisor.
+Answer the student's program/plan requirements question using ONLY the official
+UW calendar excerpts provided. Ground every course code and rule in the excerpts.
+If the exact degree rules (e.g. "how many of each") are not in the excerpts, say
+so plainly and describe the relevant courses instead of inventing counts.
+Be concise; do not fabricate course codes."""
+
+
+def answer_program_requirements(text: str) -> str | None:
+    """Scalable path: retrieve UW calendar context for ANY program → LLM answer.
+
+    Requirements are never hardcoded here — they are fetched from the official UW
+    calendar and grounded at query time, then cited.
+    """
+
+    from agent.llm import complete_text, llm_available
+    from data.calendar import calendar_link, subjects_for_program
+    from data.requirements_rag import retrieve_program_requirements
+
+    if not subjects_for_program(text):
+        return None  # not a recognizable program → let other handlers try
+
+    context, urls = retrieve_program_requirements(text)
+    link = urls[0] if urls else calendar_link(text)
+
+    if context and llm_available():
+        answer = complete_text(
+            _RAG_SYSTEM,
+            f"Question: {text}\n\nOfficial UW calendar excerpts:\n{context}\n\nOfficial link: {link}",
+        )
+        if answer:
+            return f"{answer.strip()}\n\nAuthoritative plan requirements: {link}"
+
+    # Offline / no fetch: point to the authoritative source rather than guess.
+    return (
+        "I look program requirements up from the official UW calendar rather than a "
+        f"fixed list, so they stay current for any program. Here's the authoritative "
+        f"page: {link} — tell me the specific plan (major / specialization / minor) "
+        "and I'll walk through it."
+    )
+
+
 def _pick_specialization_key(intake: dict, text: str) -> str | None:
     low = text.lower()
     if "business" in low:
@@ -159,6 +203,12 @@ def format_requirements_answer(
     list_kind = _wants_component_list(text)
     if list_kind:
         return _format_component_list(list_kind)
+
+    # Any other program (Engineering, Science, Health, Econ, …) → retrieve its
+    # requirements from the live UW calendar (scalable; nothing hardcoded).
+    prog_ans = answer_program_requirements(text)
+    if prog_ans:
+        return prog_ans
 
     spec_key = _pick_specialization_key(intake, text)
     if not spec_key:

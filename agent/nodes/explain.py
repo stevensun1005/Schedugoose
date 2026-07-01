@@ -144,7 +144,14 @@ def explain(state: PlannerState) -> dict[str, Any]:
 
     req_block = ""
     if plan and wants_requirements_qa(state):
-        req_block = format_requirements_answer(user_msg, intake, plan) + "\n\n---\n\n"
+        req_answer = format_requirements_answer(user_msg, intake, plan)
+        # A pure requirements question → return the cited/RAG answer verbatim.
+        # Never fall through to the general plan-explanation LLM, which would
+        # append an ungrounded narrative (and invent courses).
+        if not wants_plan_revision(state):
+            return {"explanation": req_answer,
+                    "used_llm": bool(state.get("llm_understood")), "llm_explained": False}
+        req_block = req_answer + "\n\n---\n\n"
 
     if plan and wants_advisory_reply(state):
         delta = state.get("turn_revision") or {}
@@ -214,8 +221,12 @@ def explain(state: PlannerState) -> dict[str, Any]:
         }
     # A plan already exists and this turn didn't change it — answer briefly
     # instead of re-dumping the whole schedule (which the UI already shows).
+    # Requirements answers are cited facts (or already LLM-generated + grounded
+    # in the RAG path), so return them verbatim — never re-phrase (that invents
+    # courses).
     if req_block:
-        return _grounded(req_block.rstrip("- \n"))
+        return {"explanation": req_block.rstrip("- \n"),
+                "used_llm": bool(state.get("llm_understood")), "llm_explained": False}
     return _grounded(pin_note + (
         "Your plan is above. Tell me what to change (e.g. \"make 2A lighter\", "
         "\"no music in 1A\", \"swap CS 486 for CS 480\"), ask about a course, or say **help**."

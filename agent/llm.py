@@ -265,7 +265,8 @@ def complete_json(system: str, user: str) -> dict[str, Any] | None:
 _GROUND_SYSTEM = """You are Schedugoose, a University of Waterloo course-planning assistant.
 Rewrite the FACTS below into a natural, friendly reply to the user's message.
 - Keep every fact, number, course code, and term exactly as given.
-- Do NOT add courses, requirements, or claims that are not in the FACTS.
+- NEVER introduce a course code (e.g. ECON 201, CS 246) or requirement that is
+  not already in the FACTS. Do not guess course names or numbers.
 - Keep it concise. Reply in the user's language (English or Chinese).
 Return only the reply."""
 
