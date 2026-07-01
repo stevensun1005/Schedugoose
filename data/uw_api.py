@@ -292,6 +292,8 @@ def lookup_course(
             "categories": list(mock.get("categories", [])) if mock else [],
             "restricted_to": list(mock.get("restricted_to", [])) if mock else [],
             "requirements_description": mock.get("requirements_description", "") if mock else "",
+            # True = confirmed exists; None = couldn't check; False = checked & absent.
+            "found": True if mock else None,
             "source": "mock",
         }
 
@@ -316,6 +318,7 @@ def lookup_course(
                 out = _from_mock()
                 out["title"] = course.get("title", out["title"])
                 out["description"] = course.get("description") or out.get("description")
+                out["found"] = True
                 req_desc = course.get("requirementsDescription") or ""
                 if req_desc:
                     out["requirements_description"] = req_desc
@@ -327,7 +330,10 @@ def lookup_course(
                         out["restricted_to"] = restricted
                 out["source"] = "live"
                 return out
+        # Queried the live API and the course wasn't in that subject → absent,
+        # unless the bundled catalog knows it.
         out = _from_mock()
+        out["found"] = True if mock else False
         out["source"] = "live+mock-fallback"
         return out
 

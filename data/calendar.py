@@ -112,6 +112,30 @@ def fetch_subject_courses(subject: str) -> tuple[str, str] | None:
     return None
 
 
+def course_blurb(course_id: str) -> tuple[str, str] | None:
+    """Extract one course's calendar entry (title + description) as (text, url).
+
+    Works for any subject via the stable per-subject course page, so lookups
+    aren't limited to the bundled catalog.
+    """
+
+    m = re.match(r"\s*([A-Za-z]{2,6})\s*(\d{3}[A-Za-z]?)", course_id)
+    if not m:
+        return None
+    subject, num = m.group(1).upper(), m.group(2).upper()
+    fetched = fetch_subject_courses(subject)
+    if not fetched:
+        return None
+    text, url = fetched
+    # Capture from the course code up to the next course code (its full entry).
+    pat = re.compile(rf"\b{subject}\s?{num}\b(.*?)(?=\b[A-Z]{{2,6}}\s?\d{{3}}[A-Za-z]?\b|\Z)", re.S)
+    hit = pat.search(text)
+    if not hit:
+        return None
+    blurb = re.sub(r"\s+", " ", f"{subject} {num}{hit.group(1)}").strip()
+    return (blurb[:600], url) if len(blurb) > len(f"{subject} {num}") + 5 else None
+
+
 def calendar_link(query: str) -> str:
     """A verify-here link: the subject course page, else the calendar home."""
 

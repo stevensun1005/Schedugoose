@@ -157,10 +157,45 @@ def gather_course_facts(
     rec = recommended_term(course_id)
     if rec:
         facts["recommended_term"] = rec
+
+    # Enrich from the live UW calendar for any subject not in our catalog.
+    if not facts.get("description"):
+        from data.calendar import course_blurb
+
+        blurb = course_blurb(course_id)
+        if blurb:
+            facts["description"] = blurb[0]
+            facts["calendar_url"] = blurb[1]
+            facts["found"] = True
     return facts
 
 
+def _no_real_info(facts: dict[str, Any]) -> bool:
+    """True when we have nothing concrete about the course (likely nonexistent)."""
+
+    return (
+        not facts.get("description")
+        and not facts.get("prereqs")
+        and not facts.get("categories")
+        and facts.get("title") in (None, "", facts.get("course_id"))
+    )
+
+
+def _is_not_found(facts: dict[str, Any]) -> bool:
+    return facts.get("found") is False or _no_real_info(facts)
+
+
+def _not_found_message(facts: dict[str, Any]) -> str:
+    cid = facts.get("course_id", "that course")
+    return (
+        f"I couldn't find **{cid}** in the UW catalog — double-check the course code "
+        "(e.g. CS 246, STAT 231), and note the term must actually offer it."
+    )
+
+
 def _template_answer(facts: dict[str, Any]) -> str:
+    if _is_not_found(facts):
+        return _not_found_message(facts)
     cid = facts.get("course_id", "This course")
     title = facts.get("title", cid)
     lines = [f"**{cid} — {title}**"]
@@ -198,6 +233,10 @@ def answer_course_question(
     facts: dict[str, Any],
 ) -> tuple[str, bool]:
     """Return (answer text, used_llm)."""
+
+    # Never invent details for a course we couldn't find.
+    if _is_not_found(facts):
+        return _not_found_message(facts), False
 
     payload = json.dumps(facts, indent=2, default=str)
     llm_text = complete_text(

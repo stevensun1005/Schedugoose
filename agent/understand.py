@@ -217,14 +217,15 @@ def wants_course_lookup(state: PlannerState) -> bool:
 
 
 def wants_requirements_qa(state: PlannerState) -> bool:
-    u = understanding_from_state(state)
-    if u:
-        return u.intent == "requirements_qa"
-    if llm_available():
-        return False
     from agent.requirements_qa import is_requirements_question
 
-    return is_requirements_question(last_user_message(state))
+    # The deterministic detector is precise ("what does X require", named
+    # specialization/minor/program) and is trusted even when the LLM labels the
+    # turn differently — so authoritative requirement answers aren't bypassed.
+    if is_requirements_question(last_user_message(state)):
+        return True
+    u = understanding_from_state(state)
+    return bool(u and u.intent == "requirements_qa")
 
 
 def wants_plan_revision(state: PlannerState) -> bool:
