@@ -99,7 +99,7 @@ MINORS: dict[str, dict[str, int]] = {
 }
 
 # Language / English categories used by the planner (see mock_data tags).
-DOMESTIC_LANGUAGE_CATEGORY = "Language"       # FREN / GER / SPAN second language
+DOMESTIC_LANGUAGE_CATEGORY = "Language"       # FR / GER / SPAN second language
 INTL_ENGLISH_CATEGORY = "Intl-English"        # ENGL 129 / ELL for intl students
 
 

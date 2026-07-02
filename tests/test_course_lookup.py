@@ -62,3 +62,25 @@ def test_requirements_routing_beats_misclassified_intent():
         "understanding": TurnUnderstanding(intent="career_advice").to_state_dict(),
     }
     assert wants_requirements_qa(state) is True
+
+
+def test_subject_aliases_cover_spoken_names():
+    from data.course_codes import is_known_subject, normalize_subject
+
+    cases = {"psychology": "PSYCH", "english": "ENGL", "stats": "STAT",
+             "biology": "BIOL", "french": "FR", "pure math": "PMATH",
+             "combinatorics": "CO", "accounting": "AFM", "japanese": "JAPAN",
+             "sociology": "SOC", "philosophy": "PHIL", "kinesiology": "KIN"}
+    for spoken, code in cases.items():
+        assert normalize_subject(spoken) == code, spoken
+        assert is_known_subject(spoken), spoken
+    # Real codes normalize to themselves; junk is not "known".
+    assert normalize_subject("SYDE") == "SYDE" and is_known_subject("SYDE")
+    assert not is_known_subject("XYZQ")
+
+
+def test_spoken_subject_resolves_catalog_courses():
+    from data.course_codes import course_ids_for_subject
+
+    assert "FR 101" in course_ids_for_subject("french")
+    assert "PSYCH 101" in course_ids_for_subject("psychology")

@@ -54,6 +54,29 @@ TEMPLATES: dict[str, ProgramTemplate] = {
         "Statistics", _MATH_FIRST_YEAR, schedulable=True,
         source="uwaterloo.ca/new-math-students/course-selection",
     ),
+    # The new-math-students first year applies faculty-wide: every BMath plan
+    # (Math Studies, ActSci, AMATH/PMATH/C&O) shares the same 1A/1B core.
+    "Mathematical Studies": ProgramTemplate(
+        "Mathematical Studies", _MATH_FIRST_YEAR, schedulable=True,
+        source="uwaterloo.ca/new-math-students/course-selection",
+        note="All BMath programs share this first year; plans diverge in 2A.",
+    ),
+    "Actuarial Science": ProgramTemplate(
+        "Actuarial Science", _MATH_FIRST_YEAR, schedulable=True,
+        source="uwaterloo.ca/new-math-students/course-selection",
+    ),
+    "Applied Mathematics": ProgramTemplate(
+        "Applied Mathematics", _MATH_FIRST_YEAR, schedulable=True,
+        source="uwaterloo.ca/new-math-students/course-selection",
+    ),
+    "Pure Mathematics": ProgramTemplate(
+        "Pure Mathematics", _MATH_FIRST_YEAR, schedulable=True,
+        source="uwaterloo.ca/new-math-students/course-selection",
+    ),
+    "Combinatorics and Optimization": ProgramTemplate(
+        "Combinatorics and Optimization", _MATH_FIRST_YEAR, schedulable=True,
+        source="uwaterloo.ca/new-math-students/course-selection",
+    ),
     # Engineering programs use their own subjects (SE/ECE/CHE) that aren't in
     # this catalog — kept as reference so the advisor can cite them accurately.
     "Software Engineering": ProgramTemplate(

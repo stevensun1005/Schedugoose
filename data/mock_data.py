@@ -78,7 +78,7 @@ MOCK_ROWS: list[RawRow] = [
     _one("ENGL 119", "Communications in Math & CS", 9, categories=["Comm", "Elective"], easiness=0.85),
     _one("ANTH 100", "Introduction to Anthropology", 11, categories=["Elective"], easiness=0.88),
     _one("GEOG 101", "Introduction to Physical Geography", 12, categories=["Elective"], easiness=0.82),
-    _one("FREN 101", "Introduction to French Language 1", 13, categories=["Language", "Elective"], easiness=0.75),
+    _one("FR 101", "Introduction to French Language 1", 13, categories=["Language", "Elective"], easiness=0.75),
     _one("GER 101", "Elementary German 1", 14, categories=["Language", "Elective"], easiness=0.75),
     _one("SPAN 101", "Introduction to Spanish 1", 15, categories=["Language", "Elective"], easiness=0.75),
     _one("ENGL 129", "Written Academic English", 4, categories=["Intl-English", "Comm", "Elective"], easiness=0.78),

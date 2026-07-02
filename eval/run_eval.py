@@ -79,7 +79,7 @@ def _check_plan_rules(plan: dict[str, Any], expect: dict[str, Any]) -> tuple[int
     if expect.get("has_language_1a"):
         total += 1
         one_a = next((t for t in plan.get("terms", []) if t.get("label") == "1A"), {})
-        langs = {"FREN 101", "GER 101", "SPAN 101"}
+        langs = {"FR 101", "GER 101", "SPAN 101"}
         passed += int(bool(set(one_a.get("courses", [])) & langs))
     if expect.get("has_intl_english_1a"):
         total += 1
@@ -89,7 +89,7 @@ def _check_plan_rules(plan: dict[str, Any], expect: dict[str, Any]) -> tuple[int
     if expect.get("no_language_1a"):
         total += 1
         one_a = next((t for t in plan.get("terms", []) if t.get("label") == "1A"), {})
-        langs = {"FREN 101", "GER 101", "SPAN 101"}
+        langs = {"FR 101", "GER 101", "SPAN 101"}
         passed += int(not (set(one_a.get("courses", [])) & langs))
     return passed, total
 
