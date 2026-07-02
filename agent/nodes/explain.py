@@ -59,6 +59,8 @@ def _template_plan(intake: dict[str, Any], config: dict[str, Any], plan: dict[st
             note = f" -- {t['note']}" if t.get("note") else ""
             cum = f" [{t.get('cumulative_units', '?')} cr total]" if t.get("cumulative_units") else ""
             lines.append(f"  - {t['label']} ({t['display']}): {', '.join(t['courses'])}{cum}{note}")
+            if t.get("why"):
+                lines.append(f"      why: {t['why']}")
         else:
             lines.append(f"  - {t['label']} ({t['display']}): {t.get('note', 'open electives')}")
 
@@ -205,7 +207,11 @@ def explain(state: PlannerState) -> dict[str, Any]:
                     "used_llm": bool(state.get("llm_understood")), "llm_explained": False}
         req_block = req_answer + "\n\n---\n\n"
 
-    if plan and wants_advisory_reply(state):
+    # Advisory only when the plan did NOT just get (re)built this turn — a fresh
+    # plan (e.g. right after a transcript upload) renders the grounded template
+    # with per-course reasons; the free-text advisory otherwise attributes a
+    # career the user never stated and pitches courses over the plan itself.
+    if plan and wants_advisory_reply(state) and not state.get("replanned"):
         delta = state.get("turn_revision") or {}
         adv_delta = {
             "term_avoid": delta.get("term_avoid") or {},
@@ -257,8 +263,23 @@ def explain(state: PlannerState) -> dict[str, Any]:
             f"{rag_note}",
         )
         if llm_text:
-            return {"explanation": pin_note + req_block + llm_text,
-                    "used_llm": True, "llm_explained": True}
+            # Post-hoc grounding: the acknowledgment may only name courses from
+            # the plan, the transcript, the user's own message, or the config.
+            # A small model sometimes pitches an unrelated (even ineligible)
+            # course here — discard and use the eligibility-checked advisory.
+            from agent.semantic import extract_course_codes
+
+            allowed = {c for t in plan.get("terms", []) for c in (t.get("courses") or [])}
+            allowed |= set(intake.get("completed") or [])
+            allowed |= set(extract_course_codes(user_msg))
+            allowed |= set(config.get("must_include") or []) | set(config.get("must_avoid") or [])
+            for codes_by_term in (config.get("term_requirements") or {}, config.get("term_avoid") or {}):
+                for codes in codes_by_term.values():
+                    allowed |= set(codes)
+            bad = [c for c in extract_course_codes(llm_text) if c not in allowed]
+            if not bad:
+                return {"explanation": pin_note + req_block + llm_text,
+                        "used_llm": True, "llm_explained": True}
         reply, explained = advisory_reply(state)
         return {
             "explanation": pin_note + req_block + reply,

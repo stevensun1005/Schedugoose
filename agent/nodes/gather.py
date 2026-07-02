@@ -58,6 +58,43 @@ def _plan_config_changed(prev: dict[str, Any] | None, config: dict[str, Any], te
     return changed and _is_command(text)
 
 
+def _filter_ineligible_config_courses(
+    config: dict[str, Any], intake: dict[str, Any], state: PlannerState,
+) -> None:
+    """Drop must_include / term-pin courses the student is not eligible for."""
+
+    from data.restrictions import student_eligible
+    from data.uw_api import fetch_courses
+
+    program, faculty = intake.get("program"), intake.get("faculty")
+    completed = set((state.get("profile") or {}).get("completed") or [])
+    completed |= set(intake.get("completed") or [])
+    if not (program or completed):
+        return
+
+    try:
+        catalog = {c.course_id: c for c in fetch_courses()}
+    except Exception:
+        return
+
+    def _ok(cid: str) -> bool:
+        c = catalog.get(cid)
+        if c is None:
+            return True  # unknown course — leave it; prefilter decides later
+        if not student_eligible(c.restricted_to, program, faculty):
+            return False
+        if any(a in completed for a in c.antireqs):
+            return False
+        return True
+
+    if config.get("must_include"):
+        config["must_include"] = [c for c in config["must_include"] if _ok(c)]
+    for key in ("term_requirements",):
+        by_term = config.get(key) or {}
+        for slot, codes in list(by_term.items()):
+            by_term[slot] = [c for c in codes if not c[0].isalpha() or " " not in c or _ok(c)]
+
+
 def gather_constraints(state: PlannerState) -> dict[str, Any]:
     text = last_user_message(state)
     prev = state.get("config")
@@ -91,6 +128,12 @@ def gather_constraints(state: PlannerState) -> dict[str, Any]:
     # answer to the elective question lands even when the LLM labels the turn
     # "general". A bare greeting with no signal leaves picks untouched.
     intake = apply_elective_inference(intake, text, config, understanding=understanding)
+
+    # Eligibility gate on config course intents: an LLM-suggested must_include
+    # the student can't take ("CS students only", antireq already on the
+    # transcript) must never enter the solver config — downstream the planner
+    # would silently drop it while replies treat config codes as trustworthy.
+    _filter_ineligible_config_courses(config, intake, state)
 
     # Standing / transcript — captured during onboarding (before a plan exists).
     # A brand-new student is the default; we only record what they actually tell us.

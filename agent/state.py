@@ -36,6 +36,13 @@ class PlannerState(TypedDict, total=False):
     graph_trace: list[str]
     understanding: dict[str, Any] | None
     turn_revision: dict[str, Any] | None
+    # Turn outcome flags. IMPORTANT: LangGraph's StateGraph only carries keys
+    # declared here — a node returning an undeclared key silently loses it on
+    # the LangGraph path (while the functional run_turn keeps it), producing
+    # maddening path-dependent routing bugs.
+    replanned: bool          # a full plan was (re)built THIS turn
+    config_changed: bool
+    profile_changed: bool
     # Dialogue
     needs_clarification: bool
     # True when this turn answers a pending onboarding question (so a bare
@@ -46,6 +53,9 @@ class PlannerState(TypedDict, total=False):
     used_llm: bool
     llm_understood: bool
     llm_explained: bool
+    llm_offline: bool
+    llm_parse_failed: bool
+    llm_configured: bool
 
 
 def last_user_message(state: PlannerState) -> str:

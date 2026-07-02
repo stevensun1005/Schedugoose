@@ -379,6 +379,21 @@ def plan_sequence(
             for cid in res.selected_courses:
                 pending_electives.discard(cid)
             chosen = [c for c in candidates if c.course_id in res.selected_courses]
+            # Record WHY each course was picked — which still-unmet requirement
+            # it fills (computed before this term's coverage is subtracted),
+            # a user pin, an elective pick, or plain credit progress.
+            why: dict[str, list[str]] = {}
+            for c in chosen:
+                hit = [cat for cat in remaining if cat in c.categories]
+                if c.course_id in user_pins:
+                    why.setdefault("pinned by you", []).append(c.course_id)
+                elif hit:
+                    why.setdefault(hit[0], []).append(c.course_id)
+                elif c.course_id in elective_picks:
+                    why.setdefault("your elective picks", []).append(c.course_id)
+                else:
+                    why.setdefault("credit toward the 20.0 total", []).append(c.course_id)
+            why_note = "; ".join(f"{reason} → {', '.join(ids)}" for reason, ids in why.items())
             for cat in list(remaining.keys()):
                 covered = sum(1 for c in chosen if cat in c.categories)
                 remaining[cat] = max(0, remaining[cat] - covered)
@@ -393,6 +408,7 @@ def plan_sequence(
                 "total_units": sched["total_units"],
                 "cumulative_units": round(units, 2),
                 "note": "; ".join(n for n in notes if n),
+                "why": why_note,
             })
         else:
             terms_out.append({

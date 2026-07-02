@@ -130,6 +130,7 @@ function renderPlan(bubbleEl, plan) {
       inner += `<div class="wlabel">open electives</div>`;
     }
     if (t.note) inner += `<div class="note">${t.note}</div>`;
+    if (t.why) inner += `<div class="note">why: ${t.why}</div>`;
     card.innerHTML = inner;
     box.appendChild(card);
   }

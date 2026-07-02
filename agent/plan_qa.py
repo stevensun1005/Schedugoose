@@ -224,17 +224,42 @@ def wants_electives_q(state: PlannerState) -> bool:
     ))
 
 
-def answer_electives(plan: dict[str, Any]) -> str:
+def answer_electives(plan: dict[str, Any], state: PlannerState | None = None) -> str:
     from data.electives import easy_elective_options
+    from data.restrictions import student_eligible
+    from data.uw_api import fetch_courses
 
+    state = state or {}
+    intake = state.get("intake") or {}
+    completed = set((state.get("profile") or {}).get("completed") or [])
+    completed |= set(intake.get("completed") or [])
     planned = {c for t in plan.get("terms", []) for c in t.get("courses", [])}
-    opts = [o for o in easy_elective_options() if o["course_id"] not in planned][:6]
+    catalog = {c.course_id: c for c in fetch_courses()}
+
+    def _eligible(cid: str) -> bool:
+        c = catalog.get(cid)
+        if c is None:
+            return False
+        if not student_eligible(c.restricted_to, intake.get("program"), intake.get("faculty")):
+            return False
+        if any(a in completed for a in c.antireqs):
+            return False
+        known = completed | planned
+        if c.prereqs and not all(p in known for p in c.prereqs):
+            return False
+        return True
+
+    opts = [o for o in easy_elective_options()
+            if o["course_id"] not in planned and o["course_id"] not in completed
+            and _eligible(o["course_id"])][:6]
     if not opts:
         return "Your plan already uses the lighter electives I have. Ask me to swap one in for a course."
     lines = ["Some electives you could take (lighter / bird-course options not already in your plan):"]
     for o in opts:
         lines.append(f"  • {o['course_id']}: {o['title']}")
-    lines.append('Tell me to add one, e.g. "add MUSIC 116 to 1A".')
+    first_study = next((t.get("label") for t in plan.get("terms", [])
+                        if t.get("kind") == "study" and t.get("courses")), "1A")
+    lines.append(f'Tell me to add one, e.g. "add {opts[0]["course_id"]} to {first_study}".')
     return "\n".join(lines)
 
 
@@ -277,7 +302,7 @@ def plan_qa_reply(state: PlannerState) -> str | None:
     if wants_conflict_q(state):
         return answer_conflict(state, plan)
     if wants_electives_q(state):
-        return answer_electives(plan)
+        return answer_electives(plan, state)
     if wants_plan_summary(state):
         return None  # handled by the caller (re-render the plan template)
     if is_smalltalk(state):

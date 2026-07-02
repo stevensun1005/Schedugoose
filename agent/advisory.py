@@ -72,17 +72,41 @@ def _plan_ids(plan: dict[str, Any]) -> list[str]:
     return [c for t in plan.get("terms", []) for c in (t.get("courses") or [])]
 
 
-def _addable_courses(state: PlannerState, plan: dict[str, Any], catalog: dict[str, Any]) -> list[str]:
-    """Career-KB courses not already planned and not core/required."""
+def _completed_set(state: PlannerState) -> set[str]:
+    intake = state.get("intake") or {}
+    profile = state.get("profile") or {}
+    return set(profile.get("completed") or []) | set(intake.get("completed") or [])
 
+
+def _addable_courses(state: PlannerState, plan: dict[str, Any], catalog: dict[str, Any]) -> list[str]:
+    """Career-KB courses THIS student could actually add.
+
+    A recommendation is a promise of eligibility, so it passes the same gates
+    as the scheduler: program restriction ("CS students only" is invisible to a
+    Math student), antirequisites already on the transcript, and prerequisites
+    satisfied by taken-or-planned courses (a failed prereq doesn't count —
+    failed attempts never enter the completed set).
+    """
+
+    from data.restrictions import student_eligible
+
+    intake = state.get("intake") or {}
+    completed = _completed_set(state)
     in_plan = set(_plan_ids(plan))
+    known = completed | in_plan
     out: list[str] = []
     for hit in state.get("rag_hits") or []:
         for cid in hit.get("courses") or []:
             c = catalog.get(cid)
-            if not c or cid in in_plan or cid in out:
+            if not c or cid in known or cid in out:
                 continue
             if _CORE_CATS & set(c.categories):  # skip required/core courses
+                continue
+            if not student_eligible(c.restricted_to, intake.get("program"), intake.get("faculty")):
+                continue
+            if any(a in completed for a in c.antireqs):
+                continue
+            if c.prereqs and not all(p in known for p in c.prereqs):
                 continue
             out.append(cid)
     return out[:6]
@@ -151,5 +175,15 @@ def advisory_reply(state: PlannerState) -> tuple[str, bool]:
     )
     text = complete_text(_SYSTEM, payload)
     if text:
-        return text.strip(), True
+        # Post-hoc grounding check: the model may only name courses from the
+        # eligibility-filtered addable list, the plan, or the transcript. A
+        # small model sometimes ignores the list and pitches a course the
+        # student cannot take (e.g. CS-only for a Math student) — in that case
+        # discard its text and use the deterministic fallback instead.
+        from agent.semantic import extract_course_codes
+
+        allowed = set(addable) | set(_plan_ids(plan)) | _completed_set(state)
+        bad = [c for c in extract_course_codes(text) if c not in allowed]
+        if not bad:
+            return text.strip(), True
     return _fallback_advisory(state), False

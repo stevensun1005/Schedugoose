@@ -117,3 +117,18 @@ def test_question_does_not_accidentally_replan(planned):
     # A workload question must not silently rebuild the plan.
     s = _ask(planned, "which term is the hardest?")
     assert not s.get("replanned")
+
+
+def test_elective_suggestions_respect_eligibility() -> None:
+    # A Math Studies student must not be offered CS-major-only "easy" courses
+    # (e.g. CS 492), and prereq-gated options require the prereq taken/planned.
+    from agent.plan_qa import answer_electives
+
+    plan = {"terms": [{"label": "4B", "kind": "study", "courses": ["STAT 330"]}]}
+    state = {"intake": {"program": "Mathematical Studies", "faculty": "Math",
+                        "completed": ["MATH 135"]},
+             "profile": {"completed": ["MATH 135"]}}
+    text = answer_electives(plan, state)
+    assert "CS 492" not in text
+    # Open electives with no prereqs are still offered.
+    assert "MUSIC 116" in text or "PHIL 145" in text or "ANTH 100" in text
