@@ -73,10 +73,11 @@ def _codes(chunk: str) -> list[str]:
     return [f"{s} {n}" for s, n in _CODE_RE.findall(chunk)]
 
 
-def _choice_label(codes: list[str]) -> str:
+def _choice_label(codes: list[str], count: int = 1) -> str:
+    prefix = "One of" if count == 1 else f"{count} of"
     if len(codes) <= 4:
-        return "One of " + "/".join(codes)
-    return f"One of {codes[0]}/{codes[1]}/… ({len(codes)} options)"
+        return f"{prefix} " + "/".join(codes)
+    return f"{prefix} {codes[0]}/{codes[1]}/… ({len(codes)} options)"
 
 
 def compile_requirements(text: str) -> list[ReqGroup]:
@@ -108,7 +109,7 @@ def compile_requirements(text: str) -> list[ReqGroup]:
             if not codes:
                 continue  # a bare section header ("Complete all of the following")
             count = len(codes) if m.group(1).lower() == "all" else int(m.group(1))
-            groups.append(ReqGroup(label=_choice_label(codes), count=count, courses=codes))
+            groups.append(ReqGroup(label=_choice_label(codes, count), count=count, courses=codes))
     return groups
 
 

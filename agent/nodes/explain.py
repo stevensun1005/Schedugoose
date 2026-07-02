@@ -161,6 +161,16 @@ def explain(state: PlannerState) -> dict[str, Any]:
         answer, used_llm = answer_course_question(user_msg, facts)
         return {"explanation": answer, "used_llm": used_llm, "llm_explained": used_llm}
 
+    # Degree audit ("check my requirements", "what else do I need for a stats
+    # minor?") → a literal ✅/❌ checklist diffed against the transcript.
+    # Returned verbatim: requirement facts are never LLM-rephrased.
+    from agent.audit import audit_reply
+
+    audit = audit_reply(state)
+    if audit is not None:
+        return {"explanation": audit,
+                "used_llm": bool(state.get("llm_understood")), "llm_explained": False}
+
     # A revision that names a term outside the plan's range ("make 5A lighter")
     # would otherwise silently re-dump an unchanged plan. Clarify instead.
     if plan:
