@@ -137,6 +137,28 @@ def _invalid_term_reference(user_msg: str, plan: dict[str, Any]) -> str | None:
     )
 
 
+_SEQ_PHRASES = (
+    "suggested sequence", "suggested course sequence", "recommended sequence",
+    "course sequence", "what order should i take", "typical sequence",
+    "standard sequence", "推荐的选课顺序", "选课顺序", "课程顺序",
+)
+
+
+def _suggested_sequence_reply(state: PlannerState, intake: dict[str, Any]) -> str | None:
+    """The official SCS suggested-sequence chart, when asked for one."""
+
+    low = last_user_message(state).lower()
+    if not any(p in low for p in _SEQ_PHRASES):
+        return None
+    from data.suggested_sequences import chart_key_for, format_chart
+
+    key = chart_key_for(low, intake.get("program"))
+    if not key:
+        return None
+    stream = "cs115" if "115" in low else "cs135"
+    return format_chart(key, stream)
+
+
 _INTRO_SYSTEM = """You are Schedugoose, a UW course-planning assistant. A plan was
 just generated; the exact term-by-term schedule is appended after your text, so
 do NOT list courses. Write a warm 1-2 sentence intro personalized to the facts
@@ -210,6 +232,12 @@ def explain(state: PlannerState) -> dict[str, Any]:
     audit = audit_reply(state)
     if audit is not None:
         return {"explanation": audit,
+                "used_llm": bool(state.get("llm_understood")), "llm_explained": False}
+
+    # "What's the suggested course sequence?" → the official SCS chart, verbatim.
+    seq_chart = _suggested_sequence_reply(state, intake)
+    if seq_chart is not None:
+        return {"explanation": seq_chart,
                 "used_llm": bool(state.get("llm_understood")), "llm_explained": False}
 
     # A revision that names a term outside the plan's range ("make 5A lighter")

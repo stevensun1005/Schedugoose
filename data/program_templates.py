@@ -92,15 +92,16 @@ TEMPLATES: dict[str, ProgramTemplate] = {
 }
 
 
-# Recommended study term for milestone courses (CS suggested sequence / prereq
-# chain). Used to explain timing and answer "when do I take X?".
+# Recommended study term for milestone courses. Transcribed from the official
+# SCS 2022-2023 BMath (CS) suggested-sequence chart, CS 135-entry stream
+# (cs.uwaterloo.ca/suggested-sequences; full charts in data/suggested_sequences.py).
 TIMELINE: dict[str, str] = {
     "CS 135": "1A", "MATH 135": "1A", "MATH 137": "1A",
     "CS 136": "1B", "MATH 136": "1B", "MATH 138": "1B",
-    "CS 245": "2A", "CS 246": "2A", "MATH 239": "2A", "STAT 230": "2A",
-    "CS 240": "2B", "CS 241": "2B", "CS 251": "2B", "STAT 231": "2B",
-    "CS 341": "3A", "CS 350": "3A", "STAT 332": "3A",
-    "CS 360": "3B", "CS 370": "3B", "CS 348": "3B",
+    "CS 245": "2A", "CS 246": "2A", "MATH 235": "2A", "MATH 237": "2A", "STAT 230": "2A",
+    "CS 240": "2B", "CS 241": "2B", "CS 251": "2B", "MATH 239": "2B",
+    "CS 350": "3A", "CS 360": "3A", "CS 365": "3A", "STAT 231": "3A",
+    "CS 341": "3B", "CS 370": "3B", "CS 371": "3B",
 }
 
 
