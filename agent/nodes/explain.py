@@ -47,7 +47,7 @@ def _template_plan(intake: dict[str, Any], config: dict[str, Any], plan: dict[st
     degree = plan.get("degree_plan") or ""
     degree_line = f" Degree: {degree}." if degree else ""
     lines.append(
-        f"Here's a term-by-term plan for {prog} (CS program){res_note} on the {plan.get('sequence')} "
+        f"Here's a term-by-term plan for {prog}{res_note} on the {plan.get('sequence')} "
         f"sequence, starting {plan.get('start_term')}.{degree_line}"
     )
     for t in plan.get("terms", []):
@@ -136,6 +136,41 @@ def _invalid_term_reference(user_msg: str, plan: dict[str, Any]) -> str | None:
         f"Your plan runs **{span}** — there's no **{which}** in it. "
         "Tell me a term in that range (e.g. \"make 2A lighter\") and I'll update it."
     )
+
+
+_INTRO_SYSTEM = """You are Schedugoose, a UW course-planning assistant. A plan was
+just generated; the exact term-by-term schedule is appended after your text, so
+do NOT list courses. Write a warm 1-2 sentence intro personalized to the facts
+below. HARD RULES: never mention a course code; never state or imply a career
+goal or interest unless one is given; invent nothing beyond the facts. Reply in
+the user's language (English or Chinese)."""
+
+
+def _plan_intro(state: PlannerState, intake: dict[str, Any], plan: dict[str, Any]) -> str:
+    """LLM-phrased intro over exact facts; the schedule itself stays verbatim.
+
+    Discarded (empty string) when the model mentions any course code — the
+    grounded template below carries all course facts.
+    """
+
+    from agent.semantic import extract_course_codes
+
+    career = (intake.get("career_goal") or "").strip()
+    if career.lower() in ("exploring options", "unknown", "none"):
+        career = ""
+    facts = (
+        f"User message:\n{last_user_message(state)}\n\n"
+        f"Program: {intake.get('program') or 'unknown'}\n"
+        f"Standing: {'returning, entering ' + intake['entering_term'] if intake.get('entering_term') else 'new student'}\n"
+        f"Transcript uploaded: {bool(intake.get('transcript_uploaded'))}\n"
+        f"Credits so far: {intake.get('units_earned') or 'n/a'} / 20.0\n"
+        f"Study terms planned: {sum(1 for t in plan.get('terms', []) if t.get('kind') == 'study')}\n"
+        f"Career goal: {career or 'none stated — do not assume one'}"
+    )
+    text = complete_text(_INTRO_SYSTEM, facts)
+    if text and not extract_course_codes(text):
+        return text.strip() + "\n\n"
+    return ""
 
 
 def explain(state: PlannerState) -> dict[str, Any]:
@@ -303,10 +338,11 @@ def explain(state: PlannerState) -> dict[str, Any]:
     # completion turn, so also key off the onboarding intent when a plan exists.
     intent = (state.get("understanding") or {}).get("intent")
     if state.get("replanned") or intent == "onboarding":
+        intro = _plan_intro(state, intake, plan)
         return {
-            "explanation": pin_note + req_block + _template_plan(intake, config, plan),
-            "used_llm": bool(state.get("llm_understood")),
-            "llm_explained": False,
+            "explanation": pin_note + req_block + intro + _template_plan(intake, config, plan),
+            "used_llm": bool(intro) or bool(state.get("llm_understood")),
+            "llm_explained": bool(intro),
         }
 
     # A plan already exists and this turn didn't change it — answer briefly

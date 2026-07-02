@@ -437,7 +437,12 @@ def plan_sequence(
         "residency": intake.get("residency"),
         "degree_plan": degree_plan.display(),
         "sequence": seq.name,
-        "start_term": format_term(start),
+        # The student's real first term — for a returning student `start` was
+        # re-anchored to a virtual 1A in the past, which must never be shown.
+        "start_term": next(
+            (t["display"] for t in terms_out if t.get("kind") == "study"),
+            format_term(start),
+        ),
         "terms": terms_out,
         "requirements": degree_reqs,
         "remaining_requirements": remaining,

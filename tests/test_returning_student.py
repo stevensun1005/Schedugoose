@@ -151,3 +151,33 @@ def test_cs_student_still_eligible_for_cs_core() -> None:
     plan = plan_sequence(intake, rule_based_config("plan", "CS-Major", None), set(), "ai")
     sched = {c for t in plan["terms"] for c in t.get("courses", [])}
     assert "CS 240" in sched
+
+
+def test_plan_start_term_shows_real_first_term_not_virtual_anchor() -> None:
+    from agent.semantic import rule_based_config
+
+    plan = plan_sequence(_math_studies_intake(),
+                         rule_based_config("plan", "MathStudies-Major", None),
+                         set(_TAKEN), "exploring options")
+    # Entering 4B with a Fall 2026 start: the displayed start term must be the
+    # student's actual next term, never the re-anchored virtual 1A in the past.
+    assert plan["start_term"] == "Fall 2026", plan["start_term"]
+
+
+def test_plan_intro_rejects_course_codes(monkeypatch) -> None:
+    import importlib
+
+    explain_mod = importlib.import_module("agent.nodes.explain")
+    _plan_intro = explain_mod._plan_intro
+
+    plan = {"terms": [{"kind": "study"}]}
+    intake = {"program": "Mathematical Studies", "entering_term": "4B"}
+    # Model mentions a course code -> intro discarded (plan text carries codes).
+    monkeypatch.setattr(explain_mod, "complete_text",
+                        lambda s, u: "Welcome back! CS 492 will suit you.")
+    assert _plan_intro({"messages": []}, intake, plan) == ""
+    # Clean intro -> used, with trailing separation.
+    monkeypatch.setattr(explain_mod, "complete_text",
+                        lambda s, u: "Welcome back — one term to go!")
+    out = _plan_intro({"messages": []}, intake, plan)
+    assert out.startswith("Welcome back") and out.endswith("\n\n")
