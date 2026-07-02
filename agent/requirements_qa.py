@@ -138,7 +138,7 @@ so plainly and describe the relevant courses instead of inventing counts.
 Be concise; do not fabricate course codes."""
 
 
-def answer_program_requirements(text: str) -> str | None:
+def answer_program_requirements(text: str, program: str | None = None) -> str | None:
     """Scalable path for ANY program — requirements are fetched, never hardcoded.
 
     1. Kuali academic-calendar API → the program's *authoritative* requirement
@@ -155,7 +155,7 @@ def answer_program_requirements(text: str) -> str | None:
     # (1) Authoritative program requirements from the UW academic calendar.
     # Returned VERBATIM (never LLM-rewritten): requirements must be exact, and a
     # small model will otherwise invent course codes not in the source.
-    kuali = requirements_for(text)
+    kuali = requirements_for(text, program=program)
     if kuali:
         title, reqs, url = kuali
         body = reqs[:1600].rstrip()
@@ -207,9 +207,23 @@ def format_requirements_answer(
         if fy:
             return fy
 
+    # Sub-plans (specializations/minors) exist under many parent programs with
+    # the same name — a Math Studies student asking about "the business
+    # specialization" means the Math Studies one, NOT the CS one from the
+    # curated table. Non-CS students go to the calendar with program context.
+    student_program = (intake.get("program") or "").strip()
+    is_cs_student = student_program.lower() in ("", "computer science", "data science")
+
     # A specific specialization/minor named → cite its real requirements first.
     comp_key = _find_component_key(intake, text)
-    if comp_key:
+    if comp_key and is_cs_student:
+        desc = describe_component(comp_key)
+        if desc:
+            return desc
+    if comp_key and not is_cs_student:
+        ctx_ans = answer_program_requirements(text, program=student_program)
+        if ctx_ans:
+            return ctx_ans
         desc = describe_component(comp_key)
         if desc:
             return desc
@@ -221,7 +235,7 @@ def format_requirements_answer(
 
     # Any other program (Engineering, Science, Health, Econ, …) → retrieve its
     # requirements from the live UW calendar (scalable; nothing hardcoded).
-    prog_ans = answer_program_requirements(text)
+    prog_ans = answer_program_requirements(text, program=student_program or None)
     if prog_ans:
         return prog_ans
 

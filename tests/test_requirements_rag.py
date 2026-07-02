@@ -58,7 +58,7 @@ def test_kuali_authoritative_path(monkeypatch):
     url = "https://uwaterloo.ca/academic-calendar/undergraduate-studies/catalog#/programs/abc"
     monkeypatch.setattr(
         "data.kuali.requirements_for",
-        lambda q: ("Mechatronics Engineering (BASc - Honours)", "Complete all: MTE 120, MTE 140.", url),
+        lambda q, program=None: ("Mechatronics Engineering (BASc - Honours)", "Complete all: MTE 120, MTE 140.", url),
     )
     import agent.llm
     monkeypatch.setattr(agent.llm, "llm_available", lambda: True)
@@ -71,7 +71,7 @@ def test_kuali_offline_returns_raw_requirements(monkeypatch):
     url = "https://uwaterloo.ca/academic-calendar/undergraduate-studies/catalog#/programs/abc"
     monkeypatch.setattr(
         "data.kuali.requirements_for",
-        lambda q: ("Economics Minor", "Complete all: ECON 101, ECON 102.", url),
+        lambda q, program=None: ("Economics Minor", "Complete all: ECON 101, ECON 102.", url),
     )
     # llm_available is False by default (conftest clears keys) → raw text + link.
     ans = answer_program_requirements("economics minor requirements")

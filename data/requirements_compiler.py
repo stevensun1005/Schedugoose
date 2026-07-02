@@ -28,7 +28,8 @@ import re
 from dataclasses import dataclass, field
 
 _CODE_RE = re.compile(r"\b([A-Z]{2,7})\s?(\d{2,3}[A-Z]?)\b(?=\s*-)")
-_CHOICE_RE = re.compile(r"Complete\s+(\d+|all)\s+of the following\b(.*)", re.I)
+# Kuali writes both "Complete 1 of the following" and "Complete all the following".
+_CHOICE_RE = re.compile(r"Complete\s+(\d+|all)\s+(?:of\s+)?the following\b(.*)", re.I)
 _LEVEL_RE = re.compile(
     r"Complete\s+(\d+)\s+additional\s+.*?(\d{3})-?\s*(?:or|and)\s*(\d{3})-level.*?"
     r"subject codes?:\s*([A-Z][A-Z,\s]+)",
@@ -139,17 +140,19 @@ def tag_catalog(groups: list[ReqGroup], catalog: list) -> None:
                 c.categories.append(g.label)
 
 
-def compile_for_program(program: str) -> dict | None:
+def compile_for_program(program: str, context_program: str | None = None) -> dict | None:
     """Live path: UW calendar (Kuali) -> compiled constraint groups.
 
-    Returns {"title", "url", "groups"} or None (offline / unknown program) —
-    callers then fall back to the curated requirement tables.
+    ``context_program`` is the student's own program, used to pick the right
+    same-titled sub-plan (e.g. the Math Studies Business Specialization, not
+    the CS one). Returns {"title", "url", "groups"} or None (offline / unknown
+    program) — callers then fall back to the curated requirement tables.
     """
 
     from data.kuali import requirements_for
 
     try:
-        hit = requirements_for(program)
+        hit = requirements_for(program, program=context_program)
     except Exception:
         return None
     if not hit:

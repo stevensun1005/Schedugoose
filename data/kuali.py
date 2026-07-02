@@ -53,13 +53,17 @@ def _get_json(url: str):
         return resp.json()
 
 
-def search_programs(query: str, limit: int = 8) -> list[dict]:
+def search_programs(query: str, limit: int = 60) -> list[dict]:
     cid = _catalog_id()
-    key = f"kuali:search:{query.lower()}"
+    key = f"kuali:search:v2:{query.lower()}:{limit}"
 
     def _producer() -> list[dict]:
         try:
-            data = _get_json(f"{_HOST}/api/v1/catalog/search/{cid}?q={httpx.QueryParams({'q': query})['q']}")
+            q = httpx.QueryParams({"q": query})["q"]
+            # The API caps its default page well below the match count — a
+            # sub-plan like "MS-Business Specialization" only appears with an
+            # explicit big limit, so always ask wide and let ranking decide.
+            data = _get_json(f"{_HOST}/api/v1/catalog/search/{cid}?q={q}&limit=100")
             return [
                 {"title": p.get("title", ""), "pid": p.get("pid", ""), "code": p.get("code", "")}
                 for p in data[:limit] if p.get("pid")
@@ -96,7 +100,10 @@ def _search_union(query: str) -> list[dict]:
     seen: set[str] = set()
     merged: list[dict] = []
     for q in dict.fromkeys(queries):  # dedupe, preserve order
-        for p in search_programs(q, limit=30):  # wide net → let ranking decide
+        # Full width: a same-titled sub-plan ("MS-Business Specialization")
+        # sits deep in the result list (position ~75 of 100) — our own ranking
+        # decides, not the API's ordering.
+        for p in search_programs(q, limit=100):
             if p["pid"] not in seen:
                 seen.add(p["pid"])
                 merged.append(p)
@@ -107,17 +114,38 @@ _COURSE_CODE = re.compile(r"^[A-Z]{2,6}\s?\d{3}[A-Z]?$")
 _CREDENTIALS = ("bachelor", "honours", "minor", "specialization", "option", "major", "diploma")
 
 
-def _ranked(query: str, results: list[dict]) -> list[dict]:
-    """Programs (not course entries) ranked by relevance to the query."""
+def _program_initials(program: str) -> str:
+    return "".join(w[0] for w in re.findall(r"[A-Za-z]+", program)).upper()
+
+
+def _ranked(query: str, results: list[dict], program: str | None = None) -> list[dict]:
+    """Programs (not course entries) ranked by relevance to the query.
+
+    ``program`` is the student's own program: sub-plans (specializations,
+    minors) exist under many parents with identical titles ("Business
+    Specialization" exists for CS, Math Studies, Math Optimization, …) and are
+    disambiguated only by the code prefix ("MS-Business Specialization") —
+    match it against the program's initials or name.
+    """
 
     low = query.lower()
     want_minor = "minor" in low
     want_spec = "special" in low or "spec" in low
     terms = _clean_terms(query)
     programs = [p for p in results if not _COURSE_CODE.match(p.get("code", "").strip())]
+    prog_low = (program or "").lower()
+    prog_initials = _program_initials(program) if program else ""
 
     def score(p: dict) -> tuple:
         t = p["title"].lower()
+        code = (p.get("code") or "")
+        prefix = code.split("-")[0].strip().upper()
+        ctx = 0
+        if program:
+            if prog_initials and prefix == prog_initials:
+                ctx = 1
+            elif prog_low and prog_low in t:
+                ctx = 1
         overlap = sum(1 for w in terms if w in t)
         is_sub = any(w in t for w in ("option", "specialization", "minor"))
         if want_minor:
@@ -127,8 +155,8 @@ def _ranked(query: str, results: list[dict]) -> list[dict]:
         else:
             kind = 0 if is_sub else 1  # a base major/honours beats an option/spec/minor
         credentialed = int(any(c in t for c in _CREDENTIALS))
-        # kind first: honour the base-vs-sub-program intent before raw overlap.
-        return (kind, overlap, credentialed, -len(t))
+        # Student's own program context first, then base-vs-sub intent.
+        return (ctx, kind, overlap, credentialed, -len(t))
 
     return sorted(programs, key=score, reverse=True)
 
@@ -149,11 +177,16 @@ def program_url(pid: str) -> str:
     return f"{_PAGE}#/programs/{pid}"
 
 
-def requirements_for(query: str) -> tuple[str, str, str] | None:
-    """Return (program_title, requirement_text, catalog_url) for a program query."""
+def requirements_for(query: str, program: str | None = None) -> tuple[str, str, str] | None:
+    """Return (program_title, requirement_text, catalog_url) for a program query.
+
+    ``program`` (the student's own program) disambiguates same-titled sub-plans
+    — "business specialization" resolves to the Mathematical Studies one for a
+    Math Studies student, the CS one for a CS student.
+    """
 
     cid = _catalog_id()
-    for match in _ranked(query, _search_union(query))[:4]:
+    for match in _ranked(query, _search_union(query), program)[:4]:
         def _producer(pid: str = match["pid"]) -> dict:
             try:
                 return _get_json(f"{_HOST}/api/v1/catalog/program/{cid}/{pid}")

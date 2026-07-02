@@ -37,7 +37,7 @@ _WHATIF_NEED = (
     "what else", "still need", "what do i need", "what courses do i need",
     "am i missing", "what am i missing", "还缺", "还需要", "缺什么", "需要什么课",
 )
-_WHATIF_TARGET = ("minor", "specialization", "specialisation", "major", "option", "diploma")
+_WHATIF_TARGET = ("minor", "specializ", "specialis", "major", "option", "diploma")
 
 
 def _low(state: PlannerState) -> str:
@@ -167,11 +167,16 @@ def component_whatif_reply(state: PlannerState) -> str | None:
         r"\s*(minor|specialization|specialisation|major|option|diploma)",
         msg, re.I,
     )
-    if not m:
-        return None
-    target = f"{m.group(1).strip()} {m.group(2)}".strip()
+    if m:
+        target = f"{m.group(1).strip()} {m.group(2)}".strip()
+    else:
+        # "I want to specialize in business" word order.
+        m2 = re.search(r"speciali[sz]e?\s+in\s+([a-z][a-z &-]{2,40})", msg, re.I)
+        if not m2:
+            return None
+        target = f"{m2.group(1).strip()} specialization"
 
-    compiled = compile_for_program(target)
+    compiled = compile_for_program(target, context_program=intake.get("program"))
     catalog = {c.course_id: c for c in fetch_courses()}
     if compiled:
         groups, title, url = compiled["groups"], compiled["title"], compiled["url"]

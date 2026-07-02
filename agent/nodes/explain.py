@@ -94,9 +94,8 @@ def _template_plan(intake: dict[str, Any], config: dict[str, Any], plan: dict[st
     src_url = plan.get("requirements_source")
     if src_url:
         lines.append(f"Degree requirements compiled live from the UW academic calendar: {src_url}")
-    trace = plan.get("graph_trace") or []
-    if trace:
-        lines.append(f"Agent pipeline ({len(trace)} steps): {' → '.join(trace[:6])}{'…' if len(trace) > 6 else ''}.")
+    # (The internal agent pipeline trace stays in the API payload for debugging
+    # but is not shown to students.)
     lines.append("Tell me to make a term lighter, avoid mornings, swap a course, or change your sequence and I'll re-plan.")
     return "\n".join(lines)
 
@@ -142,8 +141,13 @@ _INTRO_SYSTEM = """You are Schedugoose, a UW course-planning assistant. A plan w
 just generated; the exact term-by-term schedule is appended after your text, so
 do NOT list courses. Write a warm 1-2 sentence intro personalized to the facts
 below. HARD RULES: never mention a course code; never state or imply a career
-goal or interest unless one is given; invent nothing beyond the facts. Reply in
-the user's language (English or Chinese)."""
+goal or interest unless one is given; invent nothing beyond the facts."""
+
+
+def _reply_language(text: str) -> str:
+    """Deterministic language pick — small models misjudge this on their own."""
+
+    return "Chinese" if _re.search(r"[一-鿿]", text) else "English"
 
 
 def _plan_intro(state: PlannerState, intake: dict[str, Any], plan: dict[str, Any]) -> str:
@@ -158,8 +162,10 @@ def _plan_intro(state: PlannerState, intake: dict[str, Any], plan: dict[str, Any
     career = (intake.get("career_goal") or "").strip()
     if career.lower() in ("exploring options", "unknown", "none"):
         career = ""
+    user_msg = last_user_message(state)
     facts = (
-        f"User message:\n{last_user_message(state)}\n\n"
+        f"User message:\n{user_msg}\n\n"
+        f"IMPORTANT: reply in {_reply_language(user_msg)}.\n"
         f"Program: {intake.get('program') or 'unknown'}\n"
         f"Standing: {'returning, entering ' + intake['entering_term'] if intake.get('entering_term') else 'new student'}\n"
         f"Transcript uploaded: {bool(intake.get('transcript_uploaded'))}\n"
