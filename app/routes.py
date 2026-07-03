@@ -246,6 +246,11 @@ def plan_endpoint(req: PlanRequest) -> PlanResponse:
         )
 
     state: PlannerState = sessions.load(session_id)
+    # Per-turn outcome flags must never leak from the previous turn: a stale
+    # replanned=True re-dumps the full plan on every message (the LangGraph
+    # path has no turn-start reset of its own).
+    for flag in ("replanned", "config_changed", "profile_changed", "answering_onboarding"):
+        state[flag] = False
     state.setdefault("messages", [])
     state["messages"].append({"role": "user", "content": req.message})
 
