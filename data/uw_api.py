@@ -394,3 +394,65 @@ def offered_seasons_map(start: dict | None = None) -> dict[str, set[str]]:
     # everything is single-season — require at least two for filtering.
     seasons_seen = {s for v in out.values() for s in v}
     return out if len(seasons_seen) >= 2 else {}
+
+
+def _fetch_schedule_rows(code: str, subject: str, catalog: str, title: str) -> list[RawRow]:
+    """One /ClassSchedules call -> RawRows with real meeting times (cached)."""
+
+    key = os.environ["UW_API_KEY"]
+    headers = {"x-api-key": key, "accept": "application/json"}
+    with httpx.Client(base_url=API_BASE, headers=headers, timeout=15.0) as client:
+        resp = client.get(f"/ClassSchedules/{code}/{subject}/{catalog}")
+        if resp.status_code != 200:
+            return []
+        return _map_class_sections(
+            resp.json(), subject=subject, catalog=catalog, title=title, term=code,
+        )
+
+
+def attach_live_sections(courses: list[Course], season: str, year: int, cap: int = 20) -> list[Course]:
+    """Swap mock meeting times for REAL section schedules where UW publishes them.
+
+    Bounded by design: only terms whose code resolves (UW publishes ~2-3 terms
+    ahead — far-future terms keep representative times), at most ``cap`` courses
+    per term, every call cached. Offline or with SCHEDUGOOSE_LIVE_SECTIONS=0
+    this is a no-op, so tests stay deterministic.
+    """
+
+    from dataclasses import replace as _dc_replace
+
+    if not os.getenv("UW_API_KEY") or os.getenv("SCHEDUGOOSE_LIVE_SECTIONS", "1") == "0":
+        return courses
+    from data.term_codes import resolve_uw_term_code
+
+    code = resolve_uw_term_code(season, year)
+    if not code:
+        return courses
+
+    out: list[Course] = []
+    fetched = 0
+    for c in courses:
+        m = _COURSE_ID_RE.match(c.course_id)
+        if m is None or fetched >= cap:
+            out.append(c)
+            continue
+        subject, catalog = m.group(1).upper(), m.group(2)
+
+        def _producer(subject: str = subject, catalog: str = catalog, title: str = c.title) -> list[RawRow]:
+            try:
+                return _fetch_schedule_rows(code, subject, catalog, title)
+            except Exception:
+                return []
+
+        try:
+            rows = get_or_set(f"uw:sched:v1:{code}:{c.course_id}", _CACHE_TTL_S * 6, _producer)
+        except Exception:
+            rows = []
+        fetched += 1
+        real = [r for r in rows if r.get("meetings")]
+        if real:
+            sections = normalize_rows(real)[0].sections
+            out.append(_dc_replace(c, sections=list(sections)))
+        else:
+            out.append(c)  # keep representative times rather than dropping the course
+    return out

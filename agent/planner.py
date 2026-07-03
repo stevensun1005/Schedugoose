@@ -315,6 +315,13 @@ def plan_sequence(
                 c for c in candidates
                 if not season_map.get(c.course_id) or cal["season"] in season_map[c.course_id]
             ]
+        # Real meeting times for terms UW has published (live only; bounded+cached).
+        from data.uw_api import attach_live_sections
+
+        try:
+            candidates = attach_live_sections(candidates, cal["season"], cal["year"])
+        except Exception:
+            pass
         trace = append_trace(trace, f"retrieve/{slot.label}", f"{len(candidates)} candidates")
 
         if not candidates:

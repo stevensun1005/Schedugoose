@@ -63,3 +63,25 @@ def test_fall_only_course_not_planned_in_spring(monkeypatch) -> None:
     for t in plan["terms"]:
         if t.get("kind") == "study" and "STAT 334" in (t.get("courses") or []):
             assert t["season"] == "Fall", (t["label"], t["season"])
+
+
+def test_attach_live_sections_swaps_in_real_times(monkeypatch) -> None:
+    import data.uw_api as uw
+    from data.uw_api import attach_live_sections, fetch_courses
+
+    monkeypatch.setenv("UW_API_KEY", "test-key")
+    monkeypatch.setattr("data.term_codes.resolve_uw_term_code", lambda s, y: "1259")
+    monkeypatch.setattr(uw, "get_or_set", lambda key, ttl, producer: producer())
+    monkeypatch.setattr(uw, "_fetch_schedule_rows", lambda code, subject, catalog, title: [
+        uw.RawRow(course_id=f"{subject} {catalog}", title=title, units=0.5,
+                  component="LEC", section_code="LEC 001", term=code, cap=100, enrolled=10,
+                  meetings=[{"weekdays": "TTh", "start": "08:30", "end": "09:50"}]),
+    ] if f"{subject} {catalog}" == "CS 135" else [])
+
+    courses = [c for c in fetch_courses() if c.course_id in ("CS 135", "MATH 135")]
+    out = {c.course_id: c for c in attach_live_sections(courses, "Fall", 2025)}
+    # CS 135 got the real TTh 08:30 section; MATH 135 (no schedule data
+    # published) keeps its representative times instead of being dropped.
+    assert out["CS 135"].sections[0].times[0].start == 8 * 60 + 30
+    assert out["CS 135"].sections[0].term == "1259"
+    assert out["MATH 135"].sections  # untouched

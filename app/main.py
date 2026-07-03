@@ -173,7 +173,7 @@ function renderAiBadge(bubbleEl, data) {
     label = 'AI understood your message and wrote this reply';
   } else if (understood) {
     cls = 'partial';
-    label = 'AI understood your message · reply text is template (quota fallback)';
+    label = 'AI understood · facts shown verbatim (grounded, no paraphrase)';
   } else if (explained) {
     cls = 'partial';
     label = 'AI wrote this reply · intent parsed with rules';

@@ -223,7 +223,18 @@ def audit_reply(state: PlannerState) -> str | None:
     """Route both audit shapes; None when this turn isn't an audit question."""
 
     if wants_degree_audit(state):
+        _count("audit_replies_total")
         return degree_audit_reply(state)
     if wants_component_whatif(state):
+        _count("whatif_replies_total")
         return component_whatif_reply(state)
     return None
+
+
+def _count(name: str) -> None:
+    try:
+        from app.metrics import METRICS
+
+        METRICS.incr(name)
+    except Exception:
+        pass
