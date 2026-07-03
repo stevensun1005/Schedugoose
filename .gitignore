@@ -21,3 +21,4 @@ env/
 data/vector_store.json
 data/interactions.jsonl
 data/sft_dataset.jsonl
+data/sessions/

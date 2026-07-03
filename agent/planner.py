@@ -233,6 +233,15 @@ def plan_sequence(
     trace = list(graph_trace or [])
 
     catalog = fetch_courses(start_term=start)
+    # Live only: which seasons each course is actually offered in — a fall-only
+    # course must never be planned into a Spring term. Empty offline (the mock
+    # catalog carries no offering data; inventing it would be fabrication).
+    from data.uw_api import offered_seasons_map
+
+    try:
+        season_map = offered_seasons_map(start)
+    except Exception:
+        season_map = {}
     degree_plan = plan_from_intake(intake)
 
     # Requirements compiled live from the UW academic calendar (Kuali) beat the
@@ -301,6 +310,11 @@ def plan_sequence(
         avoid_ids = set(term_avoid.get(slot.label, []))
         if avoid_ids:
             candidates = [c for c in candidates if c.course_id not in avoid_ids]
+        if season_map:
+            candidates = [
+                c for c in candidates
+                if not season_map.get(c.course_id) or cal["season"] in season_map[c.course_id]
+            ]
         trace = append_trace(trace, f"retrieve/{slot.label}", f"{len(candidates)} candidates")
 
         if not candidates:

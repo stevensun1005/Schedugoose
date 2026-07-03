@@ -94,3 +94,16 @@ def test_feedback_endpoint_records(monkeypatch, tmp_path):
     assert c.post("/feedback", json={"session_id": sid, "reward": 1}).json()["ok"]
     rows = fb.load_interactions(str(log))
     assert rows and rows[-1]["reward"] == 1
+
+
+def test_sessions_survive_process_restart(tmp_path, monkeypatch) -> None:
+    # Without Redis, sessions are mirrored to JSON files and reload on miss.
+    import importlib
+
+    from app import sessions as sess
+
+    monkeypatch.setattr(sess, "_FILE_DIR", str(tmp_path))
+    sess.save("abc123", {"messages": [{"role": "user", "content": "hi"}]})
+    sess._MEMORY.clear()  # simulate a restart
+    state = sess.load("abc123")
+    assert state["messages"][0]["content"] == "hi"

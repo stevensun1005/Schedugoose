@@ -359,3 +359,37 @@ def lookup_course(
         out = _from_mock()
         out["source"] = "mock+fallback"
         return out
+
+
+def offered_seasons_map(start: dict | None = None) -> dict[str, set[str]]:
+    """course_id -> seasons it is actually offered in ("Fall"/"Winter"/"Spring").
+
+    Live only: queries the Courses endpoint once per season (cached) around the
+    student's start term and unions the results — so the planner can refuse to
+    place a fall-only course in a Spring slot. Offline (no UW_API_KEY) returns
+    {} and no filtering happens (the bundled catalog carries no offering data;
+    inventing it would be fabrication).
+    """
+
+    if not os.getenv("UW_API_KEY"):
+        return {}
+    from data.term_codes import resolve_uw_term_code
+
+    base = start or {"season": "Fall", "year": 2026}
+    year = int(base.get("year", 2026))
+    out: dict[str, set[str]] = {}
+    for season in ("Fall", "Winter", "Spring"):
+        # Winter/Spring of the academic year following a Fall start.
+        y = year if season == "Fall" else year + 1
+        code = resolve_uw_term_code(season, y) or resolve_uw_term_code(season, year)
+        if not code:
+            continue
+        try:
+            for c in fetch_courses(term=code):
+                out.setdefault(c.course_id, set()).add(season)
+        except Exception:
+            continue
+    # If only one season could be fetched, the map would wrongly claim
+    # everything is single-season — require at least two for filtering.
+    seasons_seen = {s for v in out.values() for s in v}
+    return out if len(seasons_seen) >= 2 else {}

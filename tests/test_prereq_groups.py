@@ -42,3 +42,24 @@ def test_advanced_stream_student_eligible_in_catalog() -> None:
         assert prereqs_met(by[cid], advanced), cid
     # MATH 235's alternatives come from its requirements_description parse.
     assert prereqs_met(by["MATH 235"], {"MATH 146"})
+
+
+def test_fall_only_course_not_planned_in_spring(monkeypatch) -> None:
+    from agent.planner import plan_sequence
+    from agent.semantic import rule_based_config
+
+    # Pretend STAT 334 is offered in Fall only.
+    monkeypatch.setattr(
+        "data.uw_api.offered_seasons_map",
+        lambda start=None: {"STAT 334": {"Fall"}},
+    )
+    intake = {
+        "program": "Computer Science", "faculty": "Math", "reqs_key": "CS-Major",
+        "residency": "domestic", "sequence": "math-regular",
+        "start_term": {"season": "Fall", "year": 2026},
+        "career_goal": "ds", "elective_picks": [],
+    }
+    plan = plan_sequence(intake, rule_based_config("plan", "CS-Major", None), set(), "ds")
+    for t in plan["terms"]:
+        if t.get("kind") == "study" and "STAT 334" in (t.get("courses") or []):
+            assert t["season"] == "Fall", (t["label"], t["season"])
