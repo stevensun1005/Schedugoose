@@ -194,7 +194,9 @@ def _plan_intro(state: PlannerState, intake: dict[str, Any], plan: dict[str, Any
         f"Career goal: {career or 'none stated — do not assume one'}"
     )
     text = complete_text(_INTRO_SYSTEM, facts)
-    if text and not extract_course_codes(text):
+    # Discard on any course code (the grounded plan below carries those) or the
+    # classic UW mix-up ("University of Washington", observed live).
+    if text and not extract_course_codes(text) and "washington" not in text.lower():
         return text.strip() + "\n\n"
     return ""
 
