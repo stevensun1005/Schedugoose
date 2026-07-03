@@ -56,6 +56,8 @@ def _apply_transcript(state: PlannerState, t: dict) -> None:
         state["profile"] = profile
     intake["standing"] = "returning"
     intake["transcript_uploaded"] = True
+    if t.get("in_progress"):
+        intake["in_progress"] = list(t["in_progress"])
     if t.get("level"):
         intake["entering_term"] = t["level"]
     prog = identify_program(t.get("program") or "")

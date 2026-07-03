@@ -51,6 +51,8 @@ _INDEX_HTML = """<!doctype html>
   .user { align-self:flex-end; background:#2a3340; }
   .bot { align-self:flex-start; background:var(--panel); border:1px solid #23262e; }
   .bot.err { background:#221518; border-color:#4a2d35; color:#f28b82; }
+  .bot code { background:#0c0e12; border:1px solid #2a2e37; border-radius:5px; padding:1px 5px; font-size:12px; }
+  .bot a { color:var(--accent); }
   .fb { margin-top:8px; display:flex; gap:6px; font-size:12px; color:var(--muted); }
   .fb button { background:#0f1218; border:1px solid #2a2e37; color:var(--text); border-radius:8px;
                padding:2px 8px; font-size:13px; cursor:pointer; }
@@ -105,10 +107,24 @@ const btn = document.getElementById('send');
 const profile = { completed: [] };
 let pendingTranscript = null;   // parsed transcript to send with the next /plan
 
+// Minimal, safe markdown for bot replies: escape everything first, then add
+// back only our own tags (**bold**, `code`, auto-linked URLs).
+function esc(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function md(s) {
+  let h = esc(s);
+  h = h.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+  h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
+  h = h.replace(/(https?:\/\/[^\s<)]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  return h;
+}
+function setBotText(el, text) { el.innerHTML = md(text); }
+
 function bubble(text, who) {
   const d = document.createElement('div');
   d.className = 'msg ' + who;
-  d.textContent = text;
+  if (who === 'bot') setBotText(d, text); else d.textContent = text;
   chat.appendChild(d);
   chat.scrollTop = chat.scrollHeight;
   return d;
@@ -252,7 +268,7 @@ form.addEventListener('submit', async (e) => {
     const data = await res.json();
     sessionId = data.session_id;
     localStorage.setItem('schedugoose_session', sessionId);
-    thinking.textContent = data.explanation || '(no reply)';
+    setBotText(thinking, data.explanation || '(no reply)');
     renderAiBadge(thinking, data);
     renderPlan(thinking, data.plan);
     renderFeedback(thinking);

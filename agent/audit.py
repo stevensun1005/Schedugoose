@@ -137,6 +137,16 @@ def _groups_for_program(intake: dict[str, Any]) -> tuple[list[Any], str | None, 
     return groups, intake.get("program"), None
 
 
+def _in_progress_note(intake: dict[str, Any], completed: set[str]) -> str:
+    """Honesty footnote: in-progress courses count above but aren't passed yet."""
+
+    in_prog = [c for c in (intake.get("in_progress") or []) if c in completed]
+    if not in_prog:
+        return ""
+    return (f"\nNote: {', '.join(in_prog)} are in progress this term — "
+            "they're counted above but still need a passing grade.")
+
+
 def degree_audit_reply(state: PlannerState) -> str | None:
     intake = state.get("intake") or {}
     completed = _completed_set(state)
@@ -153,7 +163,7 @@ def degree_audit_reply(state: PlannerState) -> str | None:
             else f"\nStill missing **{missing}** course(s) across the ❌ items above — "
                  "tell me to plan them (or ask about any line).")
     src = f"\nSource: {url}" if url else ""
-    return "\n".join([head, *lines]) + tail + src
+    return "\n".join([head, *lines]) + tail + _in_progress_note(intake, completed) + src
 
 
 def component_whatif_reply(state: PlannerState) -> str | None:
