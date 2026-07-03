@@ -12,7 +12,7 @@ It works for **any year of student**: a brand-new first-year gets the standard 1
 <img alt="LangGraph" src="https://img.shields.io/badge/LangGraph-orchestration-1C3C3C">
 <img alt="OR-Tools" src="https://img.shields.io/badge/OR--Tools-CP--SAT-EA4335">
 <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-async-009688?logo=fastapi&logoColor=white">
-<img alt="Tests" src="https://img.shields.io/badge/tests-164_passing-brightgreen">
+<img alt="Tests" src="https://img.shields.io/badge/tests-204_passing-brightgreen">
 <img alt="Eval" src="https://img.shields.io/badge/eval-100%25_on_3_axes-brightgreen">
 <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
 </p>
@@ -517,7 +517,7 @@ schedugoose/
 │   └── run_eval.py
 ├── scripts/
 │   └── e2e_user_flow.py        # step-by-step replay of a real chat session
-└── tests/                      # 164 deterministic tests (scheduler + agent + API)
+└── tests/                      # 204 deterministic tests (scheduler + agent + API)
 ```
 
 `scheduler/` is deliberately decoupled from the LLM so it can be unit-tested on
@@ -559,7 +559,7 @@ The harness runs fully offline (rule-based layers) so it is deterministic in CI;
 - **LLM + integer programming, not LLM-as-everything.** An LLM semantic layer maps natural-language career goals into structured constraints; an OR-Tools CP-SAT scheduler produces conflict-free, program-compliant schedules optimizing career-relevance and workload objectives.
 - **Grounded, not hallucinated.** Course data comes from the official UW Open Data API, program requirements verbatim from the UW academic-calendar (Kuali) API, career→course recommendations RAG-grounded in real requirements — the LLM never enumerates courses from its own knowledge (see [Grounding discipline](#grounding-discipline-why-it-doesnt-hallucinate)).
 - **Conversational and iterative.** LangGraph orchestrates multi-turn planning, infeasibility diagnosis, and millisecond re-optimization in response to plain-language edits ("make it lighter / no early mornings"). Any year of student: "I'm a 4th-year going into 4A" + a transcript upload plans only what's left.
-- **Verified.** 164 deterministic tests and a 3-axis eval harness (plan correctness, intent mapping, explanation faithfulness) at 100%, run as a hard CI gate on every push.
+- **Verified.** 204 deterministic tests and a 3-axis eval harness (plan correctness, intent mapping, explanation faithfulness) at 100%, run as a hard CI gate on every push.
 
 ---
 
