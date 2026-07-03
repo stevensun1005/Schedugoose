@@ -103,6 +103,10 @@ class Course:
     title: str
     units: float
     prereqs: list[str] = field(default_factory=list)
+    # Prerequisites with OR-alternatives preserved: AND of OR-groups, e.g.
+    # "(CS 136 or CS 146) and STAT 231" -> [["CS 136","CS 146"],["STAT 231"]].
+    # When empty, `prereqs` is treated as an AND list (one option per group).
+    prereq_groups: list[list[str]] = field(default_factory=list)
     # Mutually-exclusive courses (only one of a group counts / may be taken),
     # e.g. STAT 206 vs STAT 230/240. Enforced in pre-filtering + the solver.
     antireqs: list[str] = field(default_factory=list)

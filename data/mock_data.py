@@ -33,6 +33,7 @@ class RawRow(TypedDict, total=False):
     restricted_to: list[str]
     requirements_description: str
     antireqs: list[str]
+    prereq_groups: list[list[str]]
 
 
 _SLOTS: list[tuple[str, str, str]] = [
@@ -55,6 +56,7 @@ def _one(
     restricted_to: list[str] | None = None,
     requirements_description: str = "",
     antireqs: list[str] | None = None,
+    prereq_groups: list[list[str]] | None = None,
 ) -> RawRow:
     days, start, end = _SLOTS[slot % len(_SLOTS)]
     return RawRow(
@@ -67,6 +69,7 @@ def _one(
         restricted_to=restricted_to or [],
         requirements_description=requirements_description,
         antireqs=antireqs or [],
+        prereq_groups=prereq_groups or [],
     )
 
 
@@ -93,21 +96,27 @@ MOCK_ROWS: list[RawRow] = [
     _one("MUSIC 116", "Music and Culture", 13, categories=["Elective"], easiness=0.9),
 
     # ---- 2A ----
-    _one("CS 246", "Object-Oriented Software Development", 0, prereqs=["CS 136"], categories=["CS-Core", "CS-2xx"]),
-    _one("CS 245", "Logic and Computation", 2, prereqs=["CS 136"], categories=["CS-Core", "CS-2xx", "CS-Theory"]),
-    _one("MATH 239", "Introduction to Combinatorics", 8, prereqs=["MATH 136"], categories=["Math-Core", "MATH-2xx", "Math-Minor"]),
+    _one("CS 246", "Object-Oriented Software Development", 0, prereqs=["CS 136"], categories=["CS-Core", "CS-2xx"],
+         prereq_groups=[["CS 136", "CS 146"]]),
+    _one("CS 245", "Logic and Computation", 2, prereqs=["CS 136"], categories=["CS-Core", "CS-2xx", "CS-Theory"],
+         prereq_groups=[["CS 136", "CS 146"]]),
+    _one("MATH 239", "Introduction to Combinatorics", 8, prereqs=["MATH 136"], categories=["Math-Core", "MATH-2xx", "Math-Minor"],
+         prereq_groups=[["MATH 136", "MATH 146"]]),
     _one("MATH 237", "Calculus 3 for Honours Math", 6, prereqs=["MATH 138"], categories=["Math-Core", "MATH-2xx"],
          antireqs=["MATH 247"],
          requirements_description="Prereq: MATH 128/138/148; Antireq: MATH 247"),
-    _one("STAT 230", "Probability", 4, prereqs=["MATH 138"], categories=["Math-Core", "STAT-Core", "STAT-2xx"]),
+    _one("STAT 230", "Probability", 4, prereqs=["MATH 138"], categories=["Math-Core", "STAT-Core", "STAT-2xx"],
+         prereq_groups=[["MATH 128", "MATH 138", "MATH 148"]]),
     _one("PHIL 145", "Critical Thinking", 5, categories=["Elective"], easiness=0.85),
     _one("RS 110", "Religions of the West", 14, categories=["Elective"], easiness=0.86),
 
     # ---- 2B ----
-    _one("CS 240", "Data Structures and Data Management", 7, prereqs=["CS 136"], categories=["CS-Core", "CS-2xx"]),
+    _one("CS 240", "Data Structures and Data Management", 7, prereqs=["CS 136"], categories=["CS-Core", "CS-2xx"],
+         prereq_groups=[["CS 136", "CS 146"]]),
     _one("CS 241", "Foundations of Sequential Programs", 3, prereqs=["CS 246"], categories=["CS-Core", "CS-2xx"]),
     _one("CS 251", "Computer Organization and Design", 13, prereqs=["CS 241"], categories=["CS-Core", "CS-2xx", "CS-Systems"]),
-    _one("STAT 231", "Statistics", 9, prereqs=["STAT 230"], categories=["STAT-Core", "STAT-2xx"]),
+    _one("STAT 231", "Statistics", 9, prereqs=["STAT 230"], categories=["STAT-Core", "STAT-2xx"],
+         prereq_groups=[["STAT 220", "STAT 230", "STAT 240"]]),
     _one("STAT 206", "Statistics for Software Engineering", 11, prereqs=["MATH 135"],
          categories=["STAT-Core", "STAT-2xx"],
          restricted_to=["Software Eng"],

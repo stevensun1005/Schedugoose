@@ -14,9 +14,15 @@ from scheduler.types import Course
 
 
 def prereqs_met(course: Course, completed: set[str]) -> bool:
-    """All listed prerequisites must be in the completed-course set."""
+    """Prerequisites satisfied by the completed set, alternatives honoured.
 
-    return all(p in completed for p in course.prereqs)
+    Uses OR-groups when the course carries them ("MATH 136 or 146" is met by
+    either); otherwise the flat list is an AND. THE eligibility check — the
+    planner, advisory, audit, and electives all route through here.
+    """
+
+    groups = getattr(course, "prereq_groups", None) or [[p] for p in course.prereqs]
+    return all(any(opt in completed for opt in group) for group in groups)
 
 
 def prefilter_candidates(

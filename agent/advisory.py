@@ -106,7 +106,9 @@ def _addable_courses(state: PlannerState, plan: dict[str, Any], catalog: dict[st
                 continue
             if any(a in completed for a in c.antireqs):
                 continue
-            if c.prereqs and not all(p in known for p in c.prereqs):
+            from data.prefilter import prereqs_met
+
+            if not prereqs_met(c, known):
                 continue
             out.append(cid)
     return out[:6]

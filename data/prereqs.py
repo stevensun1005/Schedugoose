@@ -59,6 +59,51 @@ def antireqs_from_requirements(description: str | None) -> list[str]:
     return expand_course_codes(body)
 
 
+def prereq_groups_from_requirements(description: str | None) -> list[list[str]]:
+    """Parse UW prereq text into AND-of-OR groups, alternatives preserved.
+
+    "CS 240 and (STAT 206 or STAT 231)" -> [["CS 240"], ["STAT 206","STAT 231"]]
+    "One of MATH 106, 136, 146; MATH 135"-> [["MATH 106","MATH 136","MATH 146"],
+                                             ["MATH 135"]]
+
+    The flat ``prereqs_from_requirements`` keeps only the first option of each
+    alternative — fine for display, wrong for eligibility (a student who took
+    MATH 146 satisfies a "MATH 136 or 146" prereq). Eligibility checks use this.
+    """
+
+    if not description:
+        return []
+    body = description.strip()
+    if body.lower().startswith("prereq"):
+        body = re.sub(r"^prereq:\s*", "", body, flags=re.I)
+    body = body.split("Antireq")[0].split("Coreq")[0]
+
+    # AND segments: ";" always separates requirements; " and " separates unless
+    # inside parentheses (kept simple: split on ')and(' style via ') and'/'and (').
+    segments = re.split(r";|\)\s*and\s*\(|\)\s*and\s+|\s+and\s+\(", body)
+    if len(segments) == 1:
+        segments = re.split(r"\s+and\s+", body)
+
+    groups: list[list[str]] = []
+    for seg in segments:
+        seg = seg.strip("() .")
+        if not seg:
+            continue
+        codes = expand_course_codes(seg)
+        if not codes:
+            continue
+        is_alternative = bool(
+            re.search(r"\bor\b|/", seg, flags=re.I)
+            or re.search(r"\b(?:one|1)\s+of\b", seg, flags=re.I)
+            or (len(codes) > 1 and "," in seg and re.search(r"\bone of\b", seg, re.I))
+        )
+        if is_alternative:
+            groups.append(codes)
+        else:
+            groups.extend([c] for c in codes)
+    return groups
+
+
 def prereqs_from_requirements(description: str | None) -> list[str]:
     """Best-effort parse of UW prereq text (first OR-branch, AND within branch)."""
 

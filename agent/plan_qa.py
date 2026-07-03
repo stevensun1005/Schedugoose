@@ -251,7 +251,9 @@ def answer_electives(plan: dict[str, Any], state: PlannerState | None = None) ->
         if any(a in completed for a in c.antireqs):
             return False
         known = completed | planned
-        if c.prereqs and not all(p in known for p in c.prereqs):
+        from data.prefilter import prereqs_met
+
+        if not prereqs_met(c, known):
             return False
         return True
 

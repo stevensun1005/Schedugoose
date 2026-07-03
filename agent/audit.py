@@ -86,7 +86,9 @@ def _eligible_options(group: Any, completed: set[str], catalog: dict[str, Any],
             continue
         if any(a in completed for a in c.antireqs):
             continue
-        if c.prereqs and not all(p in completed for p in c.prereqs):
+        from data.prefilter import prereqs_met
+
+        if not prereqs_met(c, completed):
             continue
         pre = f" (prereq: {', '.join(c.prereqs)})" if c.prereqs else ""
         out.append(f"{cid}{pre}")
