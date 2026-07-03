@@ -245,7 +245,13 @@ def fetch_courses(
     """Return normalized courses. Uses UW OpenAPI when ``UW_API_KEY`` is set."""
 
     term = term or term_code_from_start(start_term)
-    subjects = subjects or ["CS", "STAT", "MATH", "CO", "ECON", "AFM", "ENGL"]
+    # Cover the whole Math faculty plus the elective/comm subjects the planner
+    # leans on — a Math Studies / ActSci student's eligible pool must include
+    # PMATH/AMATH/ACTSC, not just the CS-adjacent core.
+    subjects = subjects or [
+        "CS", "STAT", "MATH", "CO", "PMATH", "AMATH", "ACTSC",
+        "ECON", "AFM", "ENGL", "COMMST", "SPCOM", "EMLS",
+    ]
 
     if not os.getenv("UW_API_KEY"):
         _set_source("mock")

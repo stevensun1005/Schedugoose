@@ -138,6 +138,7 @@ def health() -> dict:
 class FeedbackRequest(BaseModel):
     session_id: str
     reward: int = Field(..., description="+1 (👍) or -1 (👎)")
+    note: str | None = Field(None, description="Optional: what went wrong / right")
 
 
 @router.post("/feedback")
@@ -149,9 +150,13 @@ def feedback_endpoint(req: FeedbackRequest) -> dict:
     user = last_user_message(state)
     assistant = next((m.get("content", "") for m in reversed(messages) if m.get("role") == "assistant"), "")
     if user and assistant:
+        tags = ["rated"]
+        if req.note:
+            # The reason is the most valuable part of a 👎 for SFT curation.
+            tags.append(f"note:{req.note[:300]}")
         feedback.log_interaction(
             system="schedugoose-turn", user=user, assistant=assistant,
-            reward=1 if req.reward >= 0 else -1, tags=["rated"],
+            reward=1 if req.reward >= 0 else -1, tags=tags,
         )
         METRICS.incr("feedback_positive_total" if req.reward >= 0 else "feedback_negative_total")
     return {"ok": True}

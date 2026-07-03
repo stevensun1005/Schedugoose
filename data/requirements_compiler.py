@@ -35,6 +35,14 @@ _LEVEL_RE = re.compile(
     r"subject codes?:\s*([A-Z][A-Z,\s]+)",
     re.I,
 )
+# "Complete a minimum of 13.0 units of math courses." — BMath degree-level
+# unit floors. Courses are 0.5 units, so N units = 2N courses.
+_UNITS_RE = re.compile(
+    r"Complete a minimum of\s+(\d+(?:\.\d+)?)\s+units of\s+(non-?math|math)\s+courses",
+    re.I,
+)
+# Math-faculty subject codes for the units rules (BMath degree requirements).
+MATH_SUBJECTS = ("ACTSC", "AMATH", "CO", "CS", "MATBUS", "MATH", "MTHEL", "PMATH", "STAT")
 
 
 @dataclass
@@ -44,15 +52,18 @@ class ReqGroup:
     courses: list[str] = field(default_factory=list)   # explicit choice options
     subjects: list[str] = field(default_factory=list)  # level-rule subjects
     min_level: int = 0
+    exclude_subjects: list[str] = field(default_factory=list)  # "non-math" rules
 
     def matches(self, course_id: str) -> bool:
         if course_id in self.courses:
             return True
-        if self.subjects:
-            subj, _, num = course_id.partition(" ")
-            digits = re.match(r"\d+", num or "")
-            if subj in self.subjects and digits and int(digits.group()) >= self.min_level:
-                return True
+        subj, _, num = course_id.partition(" ")
+        digits = re.match(r"\d+", num or "")
+        level_ok = bool(digits) and int(digits.group()) >= self.min_level
+        if self.subjects and subj in self.subjects and level_ok:
+            return True
+        if self.exclude_subjects and subj not in self.exclude_subjects and level_ok:
+            return True
         return False
 
     def satisfied_by(self, completed: set[str]) -> int:
@@ -60,14 +71,16 @@ class ReqGroup:
 
     def to_dict(self) -> dict:
         return {"label": self.label, "count": self.count, "courses": self.courses,
-                "subjects": self.subjects, "min_level": self.min_level}
+                "subjects": self.subjects, "min_level": self.min_level,
+                "exclude_subjects": self.exclude_subjects}
 
     @classmethod
     def from_dict(cls, d: dict) -> "ReqGroup":
         return cls(label=d["label"], count=int(d["count"]),
                    courses=list(d.get("courses") or []),
                    subjects=list(d.get("subjects") or []),
-                   min_level=int(d.get("min_level") or 0))
+                   min_level=int(d.get("min_level") or 0),
+                   exclude_subjects=list(d.get("exclude_subjects") or []))
 
 
 def _codes(chunk: str) -> list[str]:
@@ -111,6 +124,22 @@ def compile_requirements(text: str) -> list[ReqGroup]:
                 continue  # a bare section header ("Complete all of the following")
             count = len(codes) if m.group(1).lower() == "all" else int(m.group(1))
             groups.append(ReqGroup(label=_choice_label(codes, count), count=count, courses=codes))
+            continue
+        m = _UNITS_RE.search(line)
+        if m:
+            units = float(m.group(1))
+            count = int(units * 2)  # 0.5-unit courses
+            kind = m.group(2).lower().replace("-", "")
+            if kind == "math":
+                groups.append(ReqGroup(
+                    label=f"{units} units ({count} courses) of math-faculty subjects",
+                    count=count, subjects=list(MATH_SUBJECTS),
+                ))
+            else:
+                groups.append(ReqGroup(
+                    label=f"{units} units ({count} courses) of non-math subjects",
+                    count=count, exclude_subjects=list(MATH_SUBJECTS),
+                ))
     return groups
 
 

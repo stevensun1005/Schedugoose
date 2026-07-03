@@ -179,8 +179,11 @@ function renderFeedback(bubbleEl) {
     const b = document.createElement('button');
     b.type = 'button'; b.textContent = label;
     b.onclick = () => {
+      // A thumbs-down with a reason is the most useful training signal.
+      let note = null;
+      if (reward < 0) note = window.prompt('What went wrong? (optional)') || null;
       fetch('/feedback', { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ session_id: sessionId, reward }) }).catch(() => {});
+        body: JSON.stringify({ session_id: sessionId, reward, note }) }).catch(() => {});
       bar.textContent = 'Thanks for the feedback!';
     };
     bar.appendChild(b);

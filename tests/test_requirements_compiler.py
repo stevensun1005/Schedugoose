@@ -23,11 +23,11 @@ Complete a minimum of 13.0 units of math courses.
 
 def test_compiles_choice_and_level_groups() -> None:
     groups = compile_requirements(_KUALI_TEXT)
-    assert len(groups) == 4  # 3 choice groups + 1 level rule (units line skipped)
+    assert len(groups) == 5  # 3 choice groups + 1 level rule + 1 units rule
     choice = groups[0]
     assert choice.count == 1 and "CS 135" in choice.courses and "CS 145" in choice.courses
-    level = groups[-1]
-    assert level.count == 10 and level.min_level == 300
+    level = next(g for g in groups if g.min_level == 300)
+    assert level.count == 10
     # Trailing prose ("STAT See Bachelor of…") must not corrupt the subjects.
     assert "STAT" in level.subjects and "MATH" in level.subjects
     assert all(s.isalpha() for s in level.subjects)
@@ -38,12 +38,12 @@ def test_non_honours_option_satisfies_choice_group() -> None:
     groups = compile_requirements(_KUALI_TEXT)
     remaining = remaining_from_groups(groups, {"CS 135", "MATH 225", "STAT 230"})
     assert not any("MATH 225" in k for k in remaining)  # group satisfied
-    assert len(remaining) == 1  # only the 300+-level rule remains
+    assert len(remaining) == 2  # the 300+-level rule and the 13.0-units rule
 
 
 def test_level_rule_counts_all_math_faculty_subjects() -> None:
     groups = compile_requirements(_KUALI_TEXT)
-    level = groups[-1]
+    level = next(g for g in groups if g.min_level == 300)
     done = {"STAT 341", "STAT 442", "CS 330", "CS 338", "CO 327", "STAT 337"}
     assert level.satisfied_by(done) == 6
     assert level.satisfied_by({"MATH 235", "STAT 230"}) == 0  # 2xx don't count
@@ -56,7 +56,7 @@ def test_tag_catalog_marks_matching_courses() -> None:
     catalog = fetch_courses()
     tag_catalog(groups, catalog)
     by_id = {c.course_id: c for c in catalog}
-    level_label = groups[-1].label
+    level_label = next(g for g in groups if g.min_level == 300).label
     assert level_label in by_id["STAT 330"].categories
     assert level_label in by_id["CO 487"].categories
     assert level_label not in by_id["MATH 235"].categories
@@ -66,3 +66,29 @@ def test_round_trip_serialization() -> None:
     groups = compile_requirements(_KUALI_TEXT)
     for g in groups:
         assert ReqGroup.from_dict(g.to_dict()) == g
+
+
+def test_units_rules_compile_to_course_counts() -> None:
+    text = ("Complete a minimum of 13.0 units of math courses.\n"
+            "Complete a minimum of 5.0 units of non-math courses.")
+    groups = compile_requirements(text)
+    assert len(groups) == 2
+    math_g, non_g = groups
+    assert math_g.count == 26 and "MATH" in math_g.subjects and "CS" in math_g.subjects
+    assert non_g.count == 10 and non_g.exclude_subjects
+    # A math-faculty course counts only for the math rule, and vice versa.
+    assert math_g.matches("PMATH 333") and not math_g.matches("ANTH 100")
+    assert non_g.matches("ANTH 100") and not non_g.matches("STAT 230")
+    # Round-trips through serialization (exclude_subjects included).
+    assert ReqGroup.from_dict(non_g.to_dict()) == non_g
+
+
+def test_feedback_note_recorded(tmp_path) -> None:
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    c = TestClient(app)
+    r = c.post("/feedback", json={"session_id": "nope", "reward": -1,
+                                  "note": "wrong course recommended"})
+    assert r.status_code == 200  # best-effort even for unknown sessions
