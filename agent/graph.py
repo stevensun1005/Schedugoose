@@ -27,7 +27,7 @@ from agent.nodes import (
     retrieve,
     solve_schedule,
 )
-from agent.state import PlannerState, last_user_message
+from agent.state import PlannerState
 
 
 def _merge(state: PlannerState, update: dict[str, Any]) -> PlannerState:

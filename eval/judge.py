@@ -33,7 +33,8 @@ def rule_based_faithful(explanation: str, plan: dict[str, Any] | None) -> bool:
     if not mentioned or not plan:
         return True
     allowed = _allowed_courses(plan)
-    norm = lambda s: re.sub(r"\s+", " ", s).strip()
+    def norm(s: str) -> str:
+        return re.sub(r"\s+", " ", s).strip()
     return all(norm(m) in allowed for m in mentioned)
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import warnings
 
 from data.chunking import chunk_documents, chunk_text
-from data.embeddings import BM25, cosine, embed, embed_batch, tokenize
+from data.embeddings import BM25, cosine, embed, tokenize
 from data.etl import run_pipeline, transform
 from data.feedback import export_sft, log_interaction, to_sft_record
 from data.rag_store import hybrid_retrieve, retrieve_career_context

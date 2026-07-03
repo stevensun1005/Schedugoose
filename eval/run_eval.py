@@ -19,7 +19,7 @@ from typing import Any
 from agent.graph import run_turn
 from agent.state import PlannerState
 from eval.checker import verify_plan
-from eval.judge import llm_judge_faithful, rule_based_faithful
+from eval.judge import llm_judge_faithful
 
 _CASES = Path(__file__).with_name("test_cases.jsonl")
 _COURSE_RE = re.compile(r"\b[A-Z]{2,5}\s?[0-9]{3}[A-Za-z]?\b")

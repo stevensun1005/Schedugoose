@@ -12,6 +12,7 @@ from typing import Any
 
 import httpx
 
+from data.cache import get_or_set
 from data.prereqs import antireqs_from_requirements, prereq_groups_from_requirements, prereqs_from_requirements
 from data.restrictions import restriction_from_requirements
 from data.mock_data import MOCK_ROWS, RawRow

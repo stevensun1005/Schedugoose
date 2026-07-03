@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re as _re
 from typing import Any, TypedDict
 
 from agent.semantic import extract_course_codes
@@ -20,7 +21,6 @@ from data.sequences import (
     identify_program,
     match_sequence,
     parse_start_term,
-    sequences_for_faculty,
 )
 
 
@@ -64,8 +64,6 @@ def parse_standing(text: str) -> tuple[str | None, list[str]]:
         return "new", []
     return None, []
 
-
-import re as _re
 
 _ENTERING_RE = _re.compile(
     r"(?:going into|entering|heading into|about to start|starting|begin(?:ning)?|"

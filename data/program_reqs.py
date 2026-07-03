@@ -7,7 +7,7 @@ shared graduation constants.
 
 from __future__ import annotations
 
-from data.degree_plans import MAJORS, SPECIALIZATIONS, merge_requirements
+from data.degree_plans import MAJORS, SPECIALIZATIONS
 
 # Legacy flat map for single-term planner / eval (majors + specializations).
 PROGRAMS: dict[str, dict[str, int]] = {

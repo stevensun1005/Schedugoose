@@ -6,7 +6,6 @@ a few hundred candidate sections, CP-SAT returns in milliseconds.
 
 from __future__ import annotations
 
-import copy
 from dataclasses import replace
 
 from ortools.sat.python import cp_model

@@ -56,7 +56,7 @@ def test_transcript_aes_encrypted_pdf() -> None:
     # requires pypdf[crypto] and a decrypt("") call, not a "can't read" error.
     import io
 
-    from pypdf import PdfReader, PdfWriter
+    from pypdf import PdfWriter
     from pypdf.generic import DictionaryObject
 
     writer = PdfWriter()

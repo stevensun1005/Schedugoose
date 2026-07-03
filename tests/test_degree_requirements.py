@@ -8,7 +8,6 @@ from data.degree_requirements import (
     ALL_COMPONENTS,
     SPECIALIZATION_INFO,
     describe_component,
-    list_components,
 )
 from eval.checker import verify_plan
 

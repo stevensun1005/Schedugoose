@@ -15,7 +15,7 @@ These are representative of the published sequences, not a registrar audit.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)

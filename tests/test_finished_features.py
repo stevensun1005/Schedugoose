@@ -98,7 +98,6 @@ def test_feedback_endpoint_records(monkeypatch, tmp_path):
 
 def test_sessions_survive_process_restart(tmp_path, monkeypatch) -> None:
     # Without Redis, sessions are mirrored to JSON files and reload on miss.
-    import importlib
 
     from app import sessions as sess
 

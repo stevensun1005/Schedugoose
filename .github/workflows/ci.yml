@@ -29,6 +29,11 @@ jobs:
       - name: Unit + integration tests
         run: python -m pytest -q
 
+      - name: Lint (ruff)
+        run: |
+          pip install ruff
+          ruff check .
+
       # MLOps quality gate: the eval harness must keep plan correctness at 100%.
       # Runs offline (no API keys) so it is deterministic in CI.
       - name: Eval harness (model quality gate)

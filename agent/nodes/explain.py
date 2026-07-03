@@ -7,6 +7,7 @@ is actually in the plan (no invention).
 from __future__ import annotations
 
 import json
+import re as _re
 from typing import Any
 
 from agent.advisory import advisory_reply, compact_plan_summary
@@ -26,6 +27,7 @@ from agent.understand import (
     wants_plan_revision,
     wants_requirements_qa,
 )
+from agent.revision import format_turn_revision_note
 from agent.state import PlannerState, last_user_message
 
 _REVISION_SYSTEM = """You are Schedugoose, a UW course-planning assistant.
@@ -108,10 +110,6 @@ def _template_infeasible(state: PlannerState) -> str:
     return "\n".join(lines)
 
 
-from agent.revision import format_turn_revision_note
-
-import re as _re
-
 _TERM_TOKEN_RE = _re.compile(r"\b([1-9][AB])\b")
 
 
@@ -124,7 +122,7 @@ def _invalid_term_reference(user_msg: str, plan: dict[str, Any]) -> str | None:
     """
 
     labels = [t.get("label") for t in plan.get("terms", []) if t.get("label")]
-    valid = {l.upper() for l in labels}
+    valid = {lbl.upper() for lbl in labels}
     tokens = {m.group(1).upper() for m in _TERM_TOKEN_RE.finditer(user_msg)}
     bad = [t for t in tokens if t not in valid]
     if not bad:

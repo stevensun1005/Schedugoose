@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from agent.graph import plan
 from agent.llm import llm_available, llm_mode_label, llm_model, llm_provider, llm_ready, require_llm
 from data.rag_store import rag_backend
-from data.uw_api import data_source, uw_api_status
+from data.uw_api import uw_api_status
 from data.term_codes import term_code_from_start
 from agent.state import PlannerState, last_user_message
 from app import sessions

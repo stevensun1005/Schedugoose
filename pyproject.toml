@@ -38,6 +38,7 @@ rag = [
 ]
 dev = [
     "pytest>=8.0",
+    "ruff>=0.6",
 ]
 
 [tool.setuptools.packages.find]

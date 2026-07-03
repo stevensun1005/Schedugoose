@@ -7,7 +7,6 @@ from typing import Any
 from data.degree_plans import (
     SPECIALIZATIONS,
     plan_from_intake,
-    resolve_requirements,
 )
 from data.degree_requirements import ALL_COMPONENTS, describe_component, list_components
 from data.program_templates import format_first_year
@@ -259,7 +258,6 @@ def format_requirements_answer(
             minors=plan_obj.minors,
             extra_majors=plan_obj.extra_majors,
         )
-    merged = resolve_requirements(plan_obj)
     spec_extra = SPECIALIZATIONS.get(spec_key, {})
 
     lines = [

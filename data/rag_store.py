@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from data.embeddings import BM25, cosine, embed, embed_batch, tokenize
-from data.knowledge_base import KBEntry, KNOWLEDGE_BASE, retrieve as kb_retrieve
+from data.knowledge_base import KBEntry, KNOWLEDGE_BASE
 
 
 @dataclass(frozen=True)

@@ -6,6 +6,7 @@ Rule-based parsers run only when the LLM is offline.
 
 from __future__ import annotations
 
+import re as _re
 from typing import Any
 
 from agent.intake import (
@@ -57,8 +58,6 @@ def _plan_config_changed(prev: dict[str, Any] | None, config: dict[str, Any], te
     changed = any(prev.get(k) != config.get(k) for k in _PLAN_CONFIG_KEYS)
     return changed and _is_command(text)
 
-
-import re as _re
 
 _ADD_COMPONENT_RE = _re.compile(
     r"\b(?:add|declare|pursue|take on|switch to|i (?:also )?want(?: to do| to add)?)\s+"
