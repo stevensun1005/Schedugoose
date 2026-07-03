@@ -124,7 +124,11 @@ each answered in place, never by re-dumping the whole schedule:
 | "what is CS 246?", "prereqs for CS 486?", "CS 480 vs CS 486" | **course info** for *any* UW subject (title, prereqs, usual term, restrictions) or a side-by-side **comparison**; a made-up code gets a polite "couldn't find it" |
 | "what courses for data science?" | **career advice** grounded in the real catalog, prereqs shown, degree-required basics excluded |
 | "what does the AI specialization require?", "mechatronics requirements?" | **requirements** quoted **verbatim from the UW academic calendar** (Kuali API), with a citation link — never LLM-paraphrased |
-| "im a 4th year student", "going into 2B" + pasted/uploaded transcript | a plan that **starts at your term** and skips completed courses |
+| "im a 4th year student", "going into 2B" + pasted/uploaded transcript | a plan that **starts at your term** and skips completed courses — Quest PDFs are parsed by **grade**: failed attempts are excluded, retakes count once, in-progress courses tracked separately |
+| "check my degree requirements", "帮我check一下" | a **✅/❌ audit**: every requirement of your program (compiled live from the UW calendar) checked against your transcript, with eligible courses to fill each gap |
+| "if I add a statistics minor, what else do I need?" | a **what-if audit** of that plan's official requirements vs your transcript |
+| "add the statistics minor" | that plan's requirements **merged into your constraints** and the schedule re-solved |
+| "what's the suggested course sequence?" | the **official SCS chart** (BCS / BMath CS / DH / SE options, both entry streams), verbatim |
 | "show my plan", "when do I graduate?", "when are my work terms?", "which term is hardest?", "what electives can I take?" | **plan facts** read straight from the plan (deterministic, no hallucination) |
 | "change my start to Winter 2027", "switch to sequence 2" | **profile change** → re-planned |
 | "start over" | a fresh session |
@@ -147,6 +151,17 @@ Schedugoose treats this as an architecture problem, not a prompt problem:
 - **Requirements are returned verbatim.** Program/specialization requirements
   come from the UW academic-calendar (Kuali) API and are quoted exactly, with a
   link — never summarized by the model (summaries invent counts and codes).
+  For planning they are **compiled into solver constraints**
+  (`data/requirements_compiler.py`): "Complete 1 of: MATH 225/235/245" becomes
+  a choice group your transcript is diffed against, "10 additional math courses
+  at the 300- or 400-level" becomes a level rule. Same-titled sub-plans are
+  resolved in *your* program's context (a Math Studies student asking about
+  "the business specialization" gets the MS one, not the CS one).
+- **Every recommendation passes the same eligibility gates as the solver** —
+  program restrictions ("CS students only"), antirequisites already on your
+  transcript, prerequisites actually passed. LLM replies are post-hoc checked:
+  naming a course outside the eligible set discards the text for a
+  deterministic fallback.
 - **Facts stay exact through phrasing.** When the LLM does phrase an answer
   (graduation date, workload), it phrases *around* deterministic facts computed
   from the plan (`grounded_reply`), so numbers and codes can't drift.
