@@ -58,6 +58,55 @@ def _plan_config_changed(prev: dict[str, Any] | None, config: dict[str, Any], te
     return changed and _is_command(text)
 
 
+import re as _re
+
+_ADD_COMPONENT_RE = _re.compile(
+    r"\b(?:add|declare|pursue|take on|switch to|i (?:also )?want(?: to do| to add)?)\s+"
+    r"(?:the\s+|a\s+|an\s+)?(.{3,50}?)\s*(minor|specialization|specialisation|option|diploma)\b",
+    _re.I,
+)
+# What-if questions ("if I add a stats minor, what else do I need?") must NOT
+# actually change the degree — the audit answers those.
+_WHATIF_WORDS = ("what else", "still need", "what do i need", "am i missing",
+                 "what am i missing", "还缺", "还需要", "缺什么", "需要什么")
+
+
+def _maybe_add_component(intake: dict[str, Any], text: str) -> str | None:
+    """Declaring a minor/specialization merges its live requirement groups.
+
+    Only on the live-requirements path (the curated path merges via
+    degree_plan). Returns the component title when something was added.
+    """
+
+    live = intake.get("live_reqs") or {}
+    if not live.get("groups"):
+        return None
+    low = text.lower()
+    if any(w in low for w in _WHATIF_WORDS):
+        return None
+    m = _ADD_COMPONENT_RE.search(text)
+    if not m:
+        return None
+    target = f"{m.group(1).strip()} {m.group(2)}".strip()
+
+    from data.requirements_compiler import compile_for_program
+
+    compiled = compile_for_program(target, context_program=intake.get("program"))
+    if not compiled:
+        return None
+    existing = {g["label"] for g in live["groups"]}
+    new_groups = [g.to_dict() for g in compiled["groups"] if g.label not in existing]
+    if not new_groups:
+        return None
+    live["groups"] = list(live["groups"]) + new_groups
+    added = list(intake.get("added_components") or [])
+    if compiled["title"] not in added:
+        added.append(compiled["title"])
+    intake["added_components"] = added
+    intake["live_reqs"] = live
+    return compiled["title"]
+
+
 def _filter_ineligible_config_courses(
     config: dict[str, Any], intake: dict[str, Any], state: PlannerState,
 ) -> None:
@@ -190,6 +239,11 @@ def gather_constraints(state: PlannerState) -> dict[str, Any]:
             existing = list(intake.get("elective_picks") or [])
             intake["elective_picks"] = list(dict.fromkeys(existing + confident))
 
+    # "Add the statistics minor" on the live-requirements path: compile THAT
+    # plan's requirements from the calendar and merge its groups into the
+    # constraints, so the re-plan actually schedules what the minor still needs.
+    component_added = _maybe_add_component(intake, text)
+
     needed_for_default = ("program", "residency", "sequence", "start_term")
     if intake.get("transcript_uploaded") or intake.get("entering_term") not in (None, "", "1A", "1B"):
         # Residency is skipped mid-degree — don't let it block the no-career default
@@ -199,10 +253,12 @@ def gather_constraints(state: PlannerState) -> dict[str, Any]:
         intake["career_goal"] = "exploring options"
 
     complete = is_complete(intake, config)
-    career_goal = intake.get("career_goal") or state.get("career_goal", "") or text
+    # Never fall back to the raw message text as a "career goal" — downstream
+    # prompts would present the sentence as the student's stated career.
+    career_goal = intake.get("career_goal") or state.get("career_goal", "") or ""
     turn_revision = revision_delta(prev, config)
     config_changed = _plan_config_changed(prev, config, text)
-    profile_changed = bool(degree_changed) or any(
+    profile_changed = bool(degree_changed) or bool(component_added) or any(
         base_intake.get(k) and base_intake.get(k) != intake.get(k)
         for k in ("program", "residency", "sequence", "start_term")
     )

@@ -68,7 +68,14 @@ def _boost_needed(courses: list[Course], remaining: dict[str, int]) -> None:
     for c in courses:
         overlap = needed & set(c.categories)
         if overlap:
-            c.career_relevance = max(c.career_relevance, 1.0 if "Core" in "".join(overlap) else 0.9)
+            if "Core" in "".join(overlap):
+                boost = 1.0
+            else:
+                # A course covering TWO unmet requirements (e.g. a STAT 3xx that
+                # is both "300+-level math" and in the stats-minor group) must
+                # outscore a single-coverage course even if the latter is easier.
+                boost = 0.85 if len(overlap) == 1 else 1.0
+            c.career_relevance = max(c.career_relevance, boost)
 
 
 def _term_must_include(
@@ -173,6 +180,19 @@ def _apply_residency_language(intake: dict[str, Any], base_cfg: dict[str, Any]) 
     ]
     if lang_cat not in tr["1A"]:
         tr["1A"].append(lang_cat)
+
+
+def _degree_display(degree_plan: Any, intake: dict[str, Any]) -> str:
+    """Degree label + live-added components, without double-naming a component
+    the curated parse already recognized ("Stats minor" vs "Statistics Minor")."""
+
+    base = degree_plan.display()
+    low = base.lower()
+    extras = [
+        a for a in (intake.get("added_components") or [])
+        if a.split()[0].lower()[:4] not in low
+    ]
+    return base + (" + " + ", ".join(extras) if extras else "")
 
 
 def plan_sequence(
@@ -327,6 +347,15 @@ def plan_sequence(
             # as the outstanding requirements demand, never a blanket full term.
             req_units = 0.5 * sum(remaining.values())
             credit["max"] = min(2.5, max(cap, req_units))
+        # In a returning student's last couple of terms, every slot must count:
+        # demand the remaining requirement groups as per-term coverage (H4) so
+        # a drifting objective can't trade a needed course for an easy filler.
+        # solve_with_relaxation still degrades gracefully if truly infeasible.
+        if requirements_source and remaining:
+            study_left = sum(1 for s in seq.slots[idx:] if s.kind == "study")
+            if study_left <= 2:
+                cfg_data["term_program_reqs"] = {k: min(v, 5) for k, v in remaining.items()}
+
         # Per-term "make 2A lighter/heavier" — shift this term's credit target.
         load_intent = (base_cfg.get("term_load") or {}).get(slot.label)
         if load_intent == "light":
@@ -435,7 +464,7 @@ def plan_sequence(
         "program": intake.get("program"),
         "faculty": intake.get("faculty"),
         "residency": intake.get("residency"),
-        "degree_plan": degree_plan.display(),
+        "degree_plan": _degree_display(degree_plan, intake),
         "sequence": seq.name,
         # The student's real first term — for a returning student `start` was
         # re-anchored to a virtual 1A in the past, which must never be shown.

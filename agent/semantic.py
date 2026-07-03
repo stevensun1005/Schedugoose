@@ -407,13 +407,31 @@ def to_config(
 
     from agent.intent_schema import TurnUnderstanding
 
+    def _expresses_preference(t: str) -> bool:
+        low = t.lower()
+        return (
+            any(k in low for k in _LIGHT_PHRASES)
+            or any(k in low for k in _INTENSE_PHRASES)
+            or any(k in low for k in (
+                "easy", "hard", "challenge", "morning", "friday", "evening",
+                "credit", "course load", "workload", "lighter", "heavier",
+                "3 course", "4 course", "5 course", "fewer", "more courses",
+            ))
+        )
+
     fallback = rule_based_config(text, program, prev)
     reqs = (prev or {}).get("program_reqs") or get_program_reqs(program)
 
     if isinstance(understanding, TurnUnderstanding):
         merged = dict(fallback)
         llm_dict = understanding.solver.to_solver_dict(program_reqs=reqs)
-        for key in ("target_categories", "credit_load", "weights", "time_prefs", "min_easy_courses"):
+        # Objective weights / load only move when the user actually expressed a
+        # preference — otherwise the model drifts them a little every turn and
+        # unrelated messages ("add the stats minor") reshuffle near-tied picks.
+        keys = ["target_categories", "time_prefs", "min_easy_courses"]
+        if _expresses_preference(text):
+            keys += ["credit_load", "weights"]
+        for key in keys:
             if key in llm_dict:
                 merged[key] = llm_dict[key]
         for key in ("must_include", "must_avoid"):

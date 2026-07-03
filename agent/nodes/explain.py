@@ -276,7 +276,10 @@ def explain(state: PlannerState) -> dict[str, Any]:
             return _grounded(pq)
 
     req_block = ""
-    if plan and wants_requirements_qa(state):
+    if plan and wants_requirements_qa(state) and not state.get("replanned"):
+        # (When the turn just REBUILT the plan — e.g. "add the stats minor"
+        # merged new requirements and re-planned — show the plan, not the
+        # requirement text this would otherwise return.)
         req_answer = format_requirements_answer(user_msg, intake, plan)
         # A pure requirements question → return the cited/RAG answer verbatim.
         # Never fall through to the general plan-explanation LLM, which would
@@ -327,7 +330,10 @@ def explain(state: PlannerState) -> dict[str, Any]:
     # free-text LLM path left in explain: the old general _SYSTEM narrative asked
     # the model to enumerate a specialization's courses from its own knowledge,
     # which a small model answers by inventing course codes/titles not in the plan.
-    if wants_plan_revision(state):
+    # Profile changes ("add the stats minor", "switch to sequence 2") rebuild the
+    # whole plan — render the grounded template (with intro + why-notes) instead
+    # of the revision acknowledgment, which free-associates around the change.
+    if wants_plan_revision(state) and not state.get("profile_changed"):
         rag = state.get("rag_hits") or []
         rag_note = ""
         if rag:

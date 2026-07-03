@@ -90,9 +90,21 @@ def solve_with_relaxation(
         if res.feasible:
             notes.append("couldn't fit an easy course this term")
             return res, notes
+    if cfg.program_reqs:
+        # Per-term requirement coverage is best-effort: section conflicts can
+        # make full coverage impossible (e.g. two group options clash) — solve
+        # without it and let the objective boosts cover as much as possible.
+        res = solve(
+            candidates, None,
+            replace(cfg, must_include=hard_include, min_easy_courses=0, program_reqs={}),
+        )
+        if res.feasible:
+            notes.append("couldn't cover every remaining requirement this term")
+            return res, notes
     res = solve(
         candidates, None,
-        replace(cfg, must_include=hard_include, min_units=0.0, min_easy_courses=0),
+        replace(cfg, must_include=hard_include, min_units=0.0, min_easy_courses=0,
+                program_reqs={}),
     )
     if res.feasible:
         notes.append("lighter load than target")
@@ -119,7 +131,10 @@ def term_config(
         "min": float(credit.get("min", _DEFAULT_MIN_UNITS)),
         "max": float(credit.get("max", _DEFAULT_MAX_UNITS)),
     }
-    data["program_reqs"] = {}
+    # Per-term requirement coverage is normally left to the objective (boosts),
+    # but a caller can demand it — e.g. the final terms of a returning student,
+    # where "prefer" isn't enough and every slot must count.
+    data["program_reqs"] = dict(base.get("term_program_reqs") or {})
     data["min_easy_courses"] = min_easy
     if must_include:
         data["must_include"] = list(set((base.get("must_include") or []) + must_include))

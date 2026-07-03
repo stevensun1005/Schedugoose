@@ -72,3 +72,38 @@ def test_whatif_uses_curated_fallback_offline() -> None:
 def test_audit_reply_routes_and_declines_other_turns() -> None:
     assert audit_reply(_state("check my degree", ["MATH 225"])) is not None
     assert audit_reply(_state("what is CS 246", ["MATH 225"])) is None
+
+
+def test_add_component_merges_live_groups(monkeypatch) -> None:
+    from agent.nodes.gather import _maybe_add_component
+    from data.requirements_compiler import ReqGroup
+
+    minor = {"title": "Statistics Minor", "url": "https://x/minor",
+             "groups": [ReqGroup(label="3 of STAT 330/331/332/333", count=3,
+                                 courses=["STAT 330", "STAT 331", "STAT 332", "STAT 333"])]}
+    monkeypatch.setattr("data.requirements_compiler.compile_for_program",
+                        lambda target, context_program=None: minor)
+    intake = {"program": "Mathematical Studies",
+              "live_reqs": {"title": "MS", "url": "https://x", "groups": [
+                  {"label": "base", "count": 1, "courses": ["MATH 135"],
+                   "subjects": [], "min_level": 0}]}}
+    added = _maybe_add_component(intake, "add the statistics minor to my degree")
+    assert added == "Statistics Minor"
+    labels = [g["label"] for g in intake["live_reqs"]["groups"]]
+    assert "3 of STAT 330/331/332/333" in labels
+    assert intake["added_components"] == ["Statistics Minor"]
+    # Idempotent: declaring it again adds nothing.
+    assert _maybe_add_component(intake, "add the statistics minor") is None
+
+
+def test_whatif_question_does_not_add_component(monkeypatch) -> None:
+    from agent.nodes.gather import _maybe_add_component
+
+    called = []
+    monkeypatch.setattr("data.requirements_compiler.compile_for_program",
+                        lambda *a, **k: called.append(1) or None)
+    intake = {"program": "Mathematical Studies",
+              "live_reqs": {"groups": [{"label": "b", "count": 1, "courses": [],
+                                        "subjects": [], "min_level": 0}]}}
+    out = _maybe_add_component(intake, "if I add a statistics minor, what else do I need?")
+    assert out is None and not called  # audit answers what-ifs; degree unchanged

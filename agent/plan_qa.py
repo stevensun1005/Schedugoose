@@ -43,9 +43,15 @@ def help_text() -> str:
         "  • **Explain** choices — \"why CS 341 in 3A?\", \"explain my plan\"\n"
         "  • **Look up a course** — \"what is CS 246?\", \"prereqs for CS 486?\"\n"
         "  • **Career advice** — \"what courses for data science?\"\n"
-        "  • **Requirements** — \"what do I need to graduate?\", \"standard first-year courses?\"\n"
+        "  • **Requirements** — \"what do I need to graduate?\", \"standard first-year courses?\", "
+        "\"what's the suggested course sequence?\"\n"
+        "  • **Degree audit** — \"check my degree requirements\" (✅/❌ checklist vs your transcript)\n"
+        "  • **What-if** — \"if I add a statistics minor, what else do I need?\" — then "
+        "\"add the statistics minor\" to work it into the plan\n"
         "  • **Plan facts** — \"show my plan\", \"when do I graduate?\", \"when are my work terms?\"\n"
         "  • **Change your profile** — \"change my start to Winter 2027\", \"switch to sequence 2\"\n"
+        "Upload your transcript with 📎 anytime — I read completed courses (failed attempts "
+        "excluded), your program, and your term, then plan only what's left. "
         "Just tell me in plain language."
     )
 
