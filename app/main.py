@@ -69,7 +69,15 @@ _INDEX_HTML = """<!doctype html>
   input { flex:1; padding:12px 14px; border-radius:10px; border:1px solid #2a2e37; background:#0c0e12; color:var(--text); font-size:14px; }
   button { padding:12px 18px; border-radius:10px; border:none; background:var(--accent); color:#1a1a1a; font-weight:600; cursor:pointer; }
   button:disabled { opacity:.5; cursor:default; }
-  #upload { background:#0c0e12; border:1px solid #2a2e37; color:var(--text); font-size:16px; padding:12px 14px; }
+  #upload, #ics { background:#0c0e12; border:1px solid #2a2e37; color:var(--text); font-size:16px; padding:12px 14px; }
+  #ics-modal { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none;
+               align-items:center; justify-content:center; z-index:10; }
+  #ics-modal .box { background:var(--panel); border:1px solid #2a2e37; border-radius:14px;
+                    padding:18px; width:min(680px, 92vw); }
+  #ics-modal textarea { width:100%; height:220px; background:#0c0e12; color:var(--text);
+                        border:1px solid #2a2e37; border-radius:10px; padding:10px; font-size:12px; }
+  #ics-modal .row { display:flex; gap:8px; justify-content:flex-end; margin-top:10px; }
+  #ics-modal .hint { font-size:12px; color:var(--muted); margin:0 0 8px; }
   .tt { margin-top:10px; border-top:1px solid #2a2e37; padding-top:10px; }
   .tt-title { font-size:12px; color:var(--muted); margin-bottom:6px; }
   .tt-grid { display:flex; gap:4px; }
@@ -100,10 +108,22 @@ _INDEX_HTML = """<!doctype html>
 <form id="f">
   <input type="file" id="tfile" accept=".pdf,.txt,.csv,text/plain,application/pdf" style="display:none"/>
   <button type="button" id="upload" title="Upload your transcript (PDF or text) — I'll detect your completed courses">&#128206;</button>
+  <button type="button" id="ics" title="Paste your Quest class schedule — download it as an .ics calendar with real rooms">&#128197;</button>
   <input id="m" autocomplete="off"
     placeholder="e.g. I'm a first-year CS student aiming for data science, keep it light"/>
   <button id="send" type="submit">Plan</button>
 </form>
+<div id="ics-modal">
+  <div class="box">
+    <p class="hint">Paste Quest → My Class Schedule (List View) below — I'll turn it into an
+    .ics calendar with the real rooms (e.g. QNC 2501) as the event location. TBA/online rows are skipped.</p>
+    <textarea id="ics-text" placeholder="CO 327 - Deter OR Models&#10;...&#10;MW 1:00PM - 2:20PM&#10;QNC 2501&#10;..."></textarea>
+    <div class="row">
+      <button type="button" class="dl" id="ics-cancel">cancel</button>
+      <button type="button" id="ics-go">Download .ics</button>
+    </div>
+  </div>
+</div>
 <script>
 let sessionId = localStorage.getItem('schedugoose_session');
 const chat = document.getElementById('chat');
@@ -325,6 +345,28 @@ fileInput.addEventListener('change', async () => {
     note.textContent = '⚠️ ' + err.message;
     note.classList.add('err');
   }
+});
+
+// Quest schedule -> .ics with real rooms as LOCATION.
+const icsModal = document.getElementById('ics-modal');
+document.getElementById('ics').addEventListener('click', () => { icsModal.style.display = 'flex'; });
+document.getElementById('ics-cancel').addEventListener('click', () => { icsModal.style.display = 'none'; });
+document.getElementById('ics-go').addEventListener('click', async () => {
+  const text = document.getElementById('ics-text').value.trim();
+  if (!text) return;
+  try {
+    const res = await fetch('/schedule.ics', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+    if (!res.ok) { alert(await res.text()); return; }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'uw-schedule.ics';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    icsModal.style.display = 'none';
+    bubble("Your schedule calendar is downloading — import uw-schedule.ics into Google/Outlook/Apple Calendar. Rooms are set as each event's location.", 'bot');
+  } catch (err) { alert('Could not reach the server: ' + err.message); }
 });
 
 form.addEventListener('submit', async (e) => {

@@ -216,6 +216,39 @@ async def transcript_endpoint(file: UploadFile) -> dict:
     return {"ok": True, "courses": codes}
 
 
+class ScheduleIcsRequest(BaseModel):
+    text: str = Field(..., description="Pasted Quest 'My Class Schedule' page text")
+
+
+@router.post("/schedule.ics")
+def schedule_ics(req: ScheduleIcsRequest):
+    """Pasted Quest schedule -> downloadable .ics with REAL rooms as LOCATION.
+
+    Every date, time, room, and instructor comes from the paste itself —
+    nothing is invented. TBA/online rows carry no meeting time and are skipped.
+    """
+
+    from fastapi.responses import PlainTextResponse, Response
+
+    from data.quest_schedule import parse_class_schedule, to_ics
+
+    parsed = parse_class_schedule(req.text)
+    events = sum(len(c.meetings) for c in parsed["courses"])
+    METRICS.incr("schedule_ics_total")
+    if not events:
+        return PlainTextResponse(
+            "No scheduled meetings found — paste the List View of Quest's "
+            "'My Class Schedule' page (it must include the Days & Times and "
+            "Start/End Date columns).",
+            status_code=422,
+        )
+    return Response(
+        content=to_ics(parsed),
+        media_type="text/calendar",
+        headers={"Content-Disposition": 'attachment; filename="uw-schedule.ics"'},
+    )
+
+
 @router.get("/metrics")
 def metrics(format: str = "json"):
     """Observability endpoint: request/latency/LLM-usage/RAG metrics."""
