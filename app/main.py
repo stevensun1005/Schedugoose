@@ -70,6 +70,15 @@ _INDEX_HTML = """<!doctype html>
   button { padding:12px 18px; border-radius:10px; border:none; background:var(--accent); color:#1a1a1a; font-weight:600; cursor:pointer; }
   button:disabled { opacity:.5; cursor:default; }
   #upload { background:#0c0e12; border:1px solid #2a2e37; color:var(--text); font-size:16px; padding:12px 14px; }
+  .tt { margin-top:10px; border-top:1px solid #2a2e37; padding-top:10px; }
+  .tt-title { font-size:12px; color:var(--muted); margin-bottom:6px; }
+  .tt-grid { display:flex; gap:4px; }
+  .tt-col { flex:1; position:relative; background:#0c0e12; border:1px solid #2a2e37; border-radius:8px; }
+  .tt-day { text-align:center; font-size:11px; color:var(--muted); padding:2px 0; }
+  .tt-block { position:absolute; left:3px; right:3px; border-radius:5px; font-size:9.5px;
+              padding:1px 3px; overflow:hidden; color:#e8eaed; border:1px solid rgba(255,255,255,.12); }
+  .dl { background:#0f1218; border:1px solid #2a2e37; color:var(--muted); border-radius:8px;
+        padding:2px 8px; font-size:12px; cursor:pointer; }
   .ai-badge { margin-top:10px; font-size:11px; display:inline-flex; gap:6px; align-items:center;
               padding:4px 9px; border-radius:8px; line-height:1.3; }
   .ai-badge .dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
@@ -153,6 +162,81 @@ function renderPlan(bubbleEl, plan) {
   bubbleEl.appendChild(box);
 }
 
+// Weekly timetable for the first study term that has section times — real
+// UW schedules when published (live mode), representative times otherwise.
+function renderTimetable(bubbleEl, plan) {
+  const t = ((plan && plan.terms) || []).find(x => x.kind === 'study' && x.sections && x.sections.length);
+  if (!t) return;
+  function expandDays(str) {
+    const out = []; let i = 0;
+    while (i < (str || '').length) {
+      const two = str.slice(i, i + 2);
+      if (two === 'Th' || two === 'TH') { out.push('Th'); i += 2; }
+      else if (str[i] === 'R') { out.push('Th'); i += 1; }
+      else if ('MTWFS'.includes(str[i])) { out.push(str[i]); i += 1; }
+      else i += 1;
+    }
+    return out;
+  }
+  const days = ['M', 'T', 'W', 'Th', 'F'];
+  const startH = 8, endH = 20, pxPerMin = 0.6;
+  const box = document.createElement('div');
+  box.className = 'tt';
+  box.innerHTML = '<div class="tt-title">Weekly timetable — ' + t.label + ' (' + t.display + ')</div>';
+  const grid = document.createElement('div');
+  grid.className = 'tt-grid';
+  const colors = ['#2d4a38', '#3d3820', '#243447', '#4a2d35', '#3a2d4a', '#2d474a', '#47412d'];
+  const colorOf = {}; let ci = 0;
+  for (const d of days) {
+    const col = document.createElement('div');
+    col.className = 'tt-col';
+    col.style.height = ((endH - startH) * 60 * pxPerMin + 20) + 'px';
+    col.innerHTML = '<div class="tt-day">' + d + '</div>';
+    for (const sec of t.sections) {
+      for (const tm of (sec.times || [])) {
+        if (!expandDays(tm.weekdays).includes(d)) continue;
+        const [sh, sm] = String(tm.start).split(':').map(Number);
+        const [eh, em] = String(tm.end).split(':').map(Number);
+        if (isNaN(sh) || isNaN(eh)) continue;
+        if (!(sec.course_id in colorOf)) colorOf[sec.course_id] = colors[ci++ % colors.length];
+        const b = document.createElement('div');
+        b.className = 'tt-block';
+        b.style.top = (((sh * 60 + sm) - startH * 60) * pxPerMin + 20) + 'px';
+        b.style.height = Math.max(14, ((eh * 60 + em) - (sh * 60 + sm)) * pxPerMin - 2) + 'px';
+        b.style.background = colorOf[sec.course_id];
+        b.title = sec.course_id + ' ' + sec.section_code + ' ' + tm.start + '–' + tm.end;
+        b.textContent = sec.course_id.replace(' ', '') + (sec.component !== 'LEC' ? '·' + sec.component : '');
+        col.appendChild(b);
+      }
+    }
+    grid.appendChild(col);
+  }
+  box.appendChild(grid);
+  bubbleEl.appendChild(box);
+}
+
+function renderDownload(bar, plan, explanation) {
+  if (!plan || !plan.terms) return;
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'dl'; b.textContent = '⬇ save plan';
+  b.onclick = () => {
+    const lines = ['Schedugoose plan — ' + (plan.program || '') + ' (' + (plan.start_term || '') + ')', ''];
+    for (const t of plan.terms) {
+      if (t.kind === 'work') lines.push(t.label + ' (' + t.display + '): co-op work term');
+      else lines.push(t.label + ' (' + t.display + '): ' + (t.courses || []).join(', '));
+      if (t.why) lines.push('    why: ' + t.why);
+    }
+    lines.push('', explanation || '');
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'schedugoose-plan.txt';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  bar.appendChild(b);
+}
+
 function renderAiBadge(bubbleEl, data) {
   const understood = !!data.llm_understood;
   const explained = !!data.llm_explained;
@@ -188,9 +272,10 @@ function renderAiBadge(bubbleEl, data) {
   bubbleEl.appendChild(badge);
 }
 
-function renderFeedback(bubbleEl) {
+function renderFeedback(bubbleEl, plan, explanation) {
   const bar = document.createElement('div');
   bar.className = 'fb';
+  renderDownload(bar, plan, explanation);
   for (const [label, reward] of [['👍', 1], ['👎', -1]]) {
     const b = document.createElement('button');
     b.type = 'button'; b.textContent = label;
@@ -271,7 +356,8 @@ form.addEventListener('submit', async (e) => {
     setBotText(thinking, data.explanation || '(no reply)');
     renderAiBadge(thinking, data);
     renderPlan(thinking, data.plan);
-    renderFeedback(thinking);
+    renderTimetable(thinking, data.plan);
+    renderFeedback(thinking, data.plan, data.explanation);
   } catch (err) {
     let msg;
     if (err.name === 'AbortError') {

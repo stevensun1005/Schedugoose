@@ -451,8 +451,12 @@ def attach_live_sections(courses: list[Course], season: str, year: int, cap: int
         fetched += 1
         real = [r for r in rows if r.get("meetings")]
         if real:
-            sections = normalize_rows(real)[0].sections
-            out.append(_dc_replace(c, sections=list(sections)))
+            sections = list(normalize_rows(real)[0].sections)
+            # Prefer sections with seats left (attach runs after prefilter, so
+            # this is the only spot that sees real enrollment); if everything
+            # is full, keep them all — a waitlist beats silently dropping the course.
+            open_secs = [s for s in sections if s.has_space]
+            out.append(_dc_replace(c, sections=open_secs or sections))
         else:
             out.append(c)  # keep representative times rather than dropping the course
     return out
