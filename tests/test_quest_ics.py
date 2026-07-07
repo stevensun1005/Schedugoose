@@ -88,3 +88,25 @@ def test_endpoint_returns_calendar_or_friendly_422() -> None:
     assert "LOCATION:QNC 2501" in r.text
     r2 = c.post("/schedule.ics", json={"text": "nothing schedulable here"})
     assert r2.status_code == 422
+
+
+def test_holiday_occurrences_are_excluded() -> None:
+    from datetime import date
+
+    from data.quest_schedule import _holidays
+
+    h = _holidays({2026})
+    assert date(2026, 5, 18) in h    # Victoria Day (May 24 is a Sunday)
+    assert date(2026, 7, 1) in h     # Canada Day
+    assert date(2026, 8, 3) in h     # Civic Holiday
+    assert date(2026, 4, 3) in h     # Good Friday (Easter 2026-04-05)
+    assert date(2026, 2, 16) in h    # Family Day
+
+    ics = to_ics(parse_class_schedule(_PASTE))
+    # CO 327 meets MW 1pm: Victoria Day (Mon 05-18), Canada Day (Wed 07-01)
+    # and the Civic Holiday (Mon 08-03) fall inside the term -> excluded.
+    assert ("EXDATE;TZID=America/Toronto:20260518T130000,"
+            "20260701T130000,20260803T130000") in ics
+    # The Friday TUT has no holiday Fridays in range -> no EXDATE on it.
+    tut = ics.split("SUMMARY:STAT 337 TUT")[0].rsplit("BEGIN:VEVENT", 1)[1]
+    assert "EXDATE" not in tut

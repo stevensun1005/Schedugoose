@@ -12,7 +12,7 @@ It works for **any year of student**: a brand-new first-year gets the standard 1
 <img alt="LangGraph" src="https://img.shields.io/badge/LangGraph-orchestration-1C3C3C">
 <img alt="OR-Tools" src="https://img.shields.io/badge/OR--Tools-CP--SAT-EA4335">
 <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-async-009688?logo=fastapi&logoColor=white">
-<img alt="Tests" src="https://img.shields.io/badge/tests-212_passing-brightgreen">
+<img alt="Tests" src="https://img.shields.io/badge/tests-216_passing-brightgreen">
 <img alt="Eval" src="https://img.shields.io/badge/eval-100%25_on_3_axes-brightgreen">
 <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
 </p>
@@ -129,6 +129,8 @@ each answered in place, never by re-dumping the whole schedule:
 | "if I add a statistics minor, what else do I need?" | a **what-if audit** of that plan's official requirements vs your transcript |
 | "add the statistics minor" | that plan's requirements **merged into your constraints** and the schedule re-solved |
 | "what's the suggested course sequence?" | the **official SCS chart** (BCS / BMath CS / DH / SE options, both entry streams), verbatim |
+| 📎 upload transcript / 📅 paste Quest schedule | grade-aware transcript parsing; your class schedule as an **.ics calendar** — real rooms (QNC 2501) as event locations, weekly recurrence, statutory holidays excluded, every date/time/room from your paste |
+| *(after any plan)* | a **weekly timetable grid** of real UW section times + a "save plan" download |
 | "show my plan", "when do I graduate?", "when are my work terms?", "which term is hardest?", "what electives can I take?" | **plan facts** read straight from the plan (deterministic, no hallucination) |
 | "change my start to Winter 2027", "switch to sequence 2" | **profile change** → re-planned |
 | "start over" | a fresh session |
@@ -517,7 +519,7 @@ schedugoose/
 │   └── run_eval.py
 ├── scripts/
 │   └── e2e_user_flow.py        # step-by-step replay of a real chat session
-└── tests/                      # 212 deterministic tests (scheduler + agent + API)
+└── tests/                      # 216 deterministic tests (scheduler + agent + API)
 ```
 
 `scheduler/` is deliberately decoupled from the LLM so it can be unit-tested on
@@ -559,7 +561,7 @@ The harness runs fully offline (rule-based layers) so it is deterministic in CI;
 - **LLM + integer programming, not LLM-as-everything.** An LLM semantic layer maps natural-language career goals into structured constraints; an OR-Tools CP-SAT scheduler produces conflict-free, program-compliant schedules optimizing career-relevance and workload objectives.
 - **Grounded, not hallucinated.** Course data comes from the official UW Open Data API, program requirements verbatim from the UW academic-calendar (Kuali) API, career→course recommendations RAG-grounded in real requirements — the LLM never enumerates courses from its own knowledge (see [Grounding discipline](#grounding-discipline-why-it-doesnt-hallucinate)).
 - **Conversational and iterative.** LangGraph orchestrates multi-turn planning, infeasibility diagnosis, and millisecond re-optimization in response to plain-language edits ("make it lighter / no early mornings"). Any year of student: "I'm a 4th-year going into 4A" + a transcript upload plans only what's left.
-- **Verified.** 212 deterministic tests and a 3-axis eval harness (plan correctness, intent mapping, explanation faithfulness) at 100%, run as a hard CI gate on every push.
+- **Verified.** 216 deterministic tests and a 3-axis eval harness (plan correctness, intent mapping, explanation faithfulness) at 100%, run as a hard CI gate on every push.
 
 ---
 

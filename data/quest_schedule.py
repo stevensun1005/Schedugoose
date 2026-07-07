@@ -148,6 +148,49 @@ END:STANDARD
 END:VTIMEZONE"""
 
 
+def _easter(year: int) -> date:
+    """Anonymous Gregorian computus — deterministic, no dependency."""
+
+    a = year % 19
+    b, c = divmod(year, 100)
+    d, e = divmod(b, 4)
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = divmod(c, 4)
+    lo = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * lo) // 451
+    month = (h + lo - 7 * m + 114) // 31
+    day = ((h + lo - 7 * m + 114) % 31) + 1
+    return date(year, month, day)
+
+
+def _nth_weekday(year: int, month: int, weekday: int, n: int) -> date:
+    d = date(year, month, 1)
+    d += timedelta(days=(weekday - d.weekday()) % 7)
+    return d + timedelta(weeks=n - 1)
+
+
+def _holidays(years: set[int]) -> set[date]:
+    """Ontario statutory / UW-closure holidays — no classes meet on these.
+
+    Public, rule-defined dates (nothing invented): Family Day, Good Friday,
+    Victoria Day, Canada Day, Civic Holiday, Labour Day, Thanksgiving.
+    """
+
+    out: set[date] = set()
+    for y in years:
+        out.add(_nth_weekday(y, 2, 0, 3))                     # Family Day
+        out.add(_easter(y) - timedelta(days=2))               # Good Friday
+        vic = date(y, 5, 24)                                  # Victoria Day:
+        out.add(vic - timedelta(days=vic.weekday()))          # last Monday ≤ May 24
+        out.add(date(y, 7, 1))                                # Canada Day
+        out.add(_nth_weekday(y, 8, 0, 1))                     # Civic Holiday
+        out.add(_nth_weekday(y, 9, 0, 1))                     # Labour Day
+        out.add(_nth_weekday(y, 10, 0, 2))                    # Thanksgiving
+    return out
+
+
 def _first_on_or_after(start: date, weekday_nums: list[int]) -> date | None:
     for off in range(14):
         d = start + timedelta(days=off)
@@ -172,6 +215,9 @@ def to_ics(parsed: dict) -> str:
         _VTIMEZONE,
     ]
     n = 0
+    years = {c.meetings[0].date_start.year for c in parsed["courses"] if c.meetings}
+    years |= {c.meetings[0].date_end.year for c in parsed["courses"] if c.meetings}
+    holidays = _holidays(years)
     for course in parsed["courses"]:
         for mt in course.meetings:
             first = _first_on_or_after(mt.date_start, mt.weekday_nums)
@@ -181,6 +227,12 @@ def to_ics(parsed: dict) -> str:
             start_dt = f"{first:%Y%m%d}T{mt.start.replace(':', '')}00"
             end_dt = f"{first:%Y%m%d}T{mt.end.replace(':', '')}00"
             until = f"{mt.date_end:%Y%m%d}T235959Z"
+            # No classes on statutory holidays — exclude the occurrences that
+            # would otherwise land on them.
+            exdates = sorted(
+                d for d in holidays
+                if mt.date_start <= d <= mt.date_end and d.weekday() in mt.weekday_nums
+            )
             summary = f"{course.course_id} {mt.component}"
             desc = f"{course.title} — {mt.component} {mt.section}"
             if mt.instructor:
@@ -192,6 +244,11 @@ def to_ics(parsed: dict) -> str:
                 f"DTSTART;TZID=America/Toronto:{start_dt}",
                 f"DTEND;TZID=America/Toronto:{end_dt}",
                 f"RRULE:FREQ=WEEKLY;BYDAY={','.join(mt.days)};UNTIL={until}",
+                *([
+                    "EXDATE;TZID=America/Toronto:" + ",".join(
+                        f"{d:%Y%m%d}T{mt.start.replace(':', '')}00" for d in exdates
+                    )
+                ] if exdates else []),
                 f"SUMMARY:{_ics_escape(summary)}",
                 f"LOCATION:{_ics_escape(mt.room)}",
                 f"DESCRIPTION:{_ics_escape(desc)}",
