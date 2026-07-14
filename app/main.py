@@ -139,7 +139,8 @@ let pendingTranscript = null;   // parsed transcript to send with the next /plan
 // Minimal, safe markdown for bot replies: escape everything first, then add
 // back only our own tags (**bold**, `code`, auto-linked URLs).
 function esc(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 function md(s) {
   let h = esc(s);
@@ -166,16 +167,16 @@ function renderPlan(bubbleEl, plan) {
   for (const t of plan.terms) {
     const card = document.createElement('div');
     card.className = 'term' + (t.kind === 'work' ? ' work' : '');
-    let inner = `<div class="hd"><span>${t.label}</span><span class="yr">${t.display}</span></div>`;
+    let inner = `<div class="hd"><span>${esc(String(t.label))}</span><span class="yr">${esc(String(t.display))}</span></div>`;
     if (t.kind === 'work') {
       inner += `<div class="wlabel">Co-op work term</div>`;
     } else if (t.courses && t.courses.length) {
-      inner += '<ul>' + t.courses.map(c => `<li>${c}</li>`).join('') + '</ul>';
+      inner += '<ul>' + t.courses.map(c => `<li>${esc(String(c))}</li>`).join('') + '</ul>';
     } else {
       inner += `<div class="wlabel">open electives</div>`;
     }
-    if (t.note) inner += `<div class="note">${t.note}</div>`;
-    if (t.why) inner += `<div class="note">why: ${t.why}</div>`;
+    if (t.note) inner += `<div class="note">${esc(String(t.note))}</div>`;
+    if (t.why) inner += `<div class="note">why: ${esc(String(t.why))}</div>`;
     card.innerHTML = inner;
     box.appendChild(card);
   }
@@ -202,7 +203,8 @@ function renderTimetable(bubbleEl, plan) {
   const startH = 8, endH = 20, pxPerMin = 0.6;
   const box = document.createElement('div');
   box.className = 'tt';
-  box.innerHTML = '<div class="tt-title">Weekly timetable — ' + t.label + ' (' + t.display + ')</div>';
+  box.innerHTML = '<div class="tt-title">Weekly timetable — ' + esc(String(t.label))
+    + ' (' + esc(String(t.display)) + ')</div>';
   const grid = document.createElement('div');
   grid.className = 'tt-grid';
   const colors = ['#2d4a38', '#3d3820', '#243447', '#4a2d35', '#3a2d4a', '#2d474a', '#47412d'];

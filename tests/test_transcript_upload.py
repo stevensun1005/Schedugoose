@@ -43,6 +43,21 @@ def test_transcript_broken_pdf_is_friendly_error() -> None:
     assert r.json()["ok"] is False
 
 
+def test_transcript_rejects_oversized_file() -> None:
+    from app.routes import _MAX_TRANSCRIPT_BYTES
+
+    r = _client().post(
+        "/transcript",
+        files={"file": ("huge.txt", b"x" * (_MAX_TRANSCRIPT_BYTES + 1), "text/plain")},
+    )
+    assert r.status_code == 413
+    assert r.json() == {
+        "ok": False,
+        "courses": [],
+        "error": "Transcript files must be 10 MB or smaller.",
+    }
+
+
 def test_standing_regex_allows_words_between() -> None:
     from agent.intake import parse_entering_term
 

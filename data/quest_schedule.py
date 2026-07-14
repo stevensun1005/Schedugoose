@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 _COURSE_RE = re.compile(r"^([A-Z]{2,6}\s?\d{2,3}[A-Z]?)\s*-\s*(.+)$")
 _CLASSNBR_RE = re.compile(r"^\d{4,5}$")
@@ -206,7 +206,7 @@ def _ics_escape(s: str) -> str:
 def to_ics(parsed: dict) -> str:
     """Weekly-recurring VEVENTs; LOCATION is the real room from the paste."""
 
-    now = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    now = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     out = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",

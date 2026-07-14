@@ -22,6 +22,7 @@ from data.program_reqs import list_programs
 
 router = APIRouter()
 _log = logging.getLogger("schedugoose")
+_MAX_TRANSCRIPT_BYTES = 10 * 1024 * 1024
 
 
 class ProfileIn(BaseModel):
@@ -174,7 +175,14 @@ async def transcript_endpoint(file: UploadFile) -> dict:
 
     from agent.semantic import extract_course_codes
 
-    raw = await file.read()
+    raw = await file.read(_MAX_TRANSCRIPT_BYTES + 1)
+    if len(raw) > _MAX_TRANSCRIPT_BYTES:
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            status_code=413,
+            content={"ok": False, "courses": [], "error": "Transcript files must be 10 MB or smaller."},
+        )
     name = (file.filename or "").lower()
     text = ""
     if name.endswith(".pdf") or raw[:5] == b"%PDF-":
