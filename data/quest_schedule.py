@@ -84,7 +84,18 @@ def _to_24h(h: str, m: str, ap: str) -> str:
 def parse_class_schedule(text: str) -> dict:
     """-> {"term": "Spring 2026" | None, "courses": [ScheduledCourse, ...]}"""
 
-    lines = [ln.strip() for ln in text.splitlines()]
+    # Browser copy behaviour varies: some paste each table cell on its own
+    # line, others keep a meeting row as ONE tab-separated line
+    # ("3775\t001\tLEC\tMW 1:00PM - 2:20PM\tQNC 2501\t..."). Expand the latter.
+    raw_lines: list[str] = []
+    for ln in text.splitlines():
+        cells = [c.strip() for c in ln.split("\t") if c.strip()]
+        if len(cells) >= 7 and _CLASSNBR_RE.match(cells[0]) and cells[2] in _COMPONENTS:
+            raw_lines.extend(cells[:6])
+            raw_lines.append(cells[6] if _DATES_RE.match(cells[6]) else " ".join(cells[6:]))
+        else:
+            raw_lines.append(ln)
+    lines = [ln.strip() for ln in raw_lines]
     term = None
     for ln in lines:
         m = _TERM_RE.search(ln)

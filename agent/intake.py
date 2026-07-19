@@ -46,6 +46,9 @@ _NEW_STUDENT_WORDS = (
 _DONE_CONTEXT = (
     "taken", "took", "completed", "complete", "finished", "done", "passed",
     "already did", "credit for", "transferred", "so far", "this is my transcript",
+    # currently-enrolled courses count as taken for planning (they'll be done
+    # before any planned term starts) — same treatment as transcript in-progress
+    "enrolled", "currently taking", "taking this term",
 )
 
 

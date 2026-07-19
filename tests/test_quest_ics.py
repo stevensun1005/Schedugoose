@@ -110,3 +110,25 @@ def test_holiday_occurrences_are_excluded() -> None:
     # The Friday TUT has no holiday Fridays in range -> no EXDATE on it.
     tut = ics.split("SUMMARY:STAT 337 TUT")[0].rsplit("BEGIN:VEVENT", 1)[1]
     assert "EXDATE" not in tut
+
+
+def test_tab_separated_meeting_rows_parse_too() -> None:
+    # Some browsers copy a Quest meeting row as ONE tab-separated line.
+    paste = (
+        "Spring 2026 | Undergraduate | University of Waterloo\n"
+        "CO 327 - Deter OR Models (Non-Spec)\n"
+        "3775\t001\tLEC\tMW 1:00PM - 2:20PM\tQNC 2501\tA Instructor\t05/11/2026 - 08/05/2026\n"
+    )
+    parsed = parse_class_schedule(paste)
+    m = parsed["courses"][0].meetings[0]
+    assert m.room == "QNC 2501" and m.days == ["MO", "WE"]
+    assert str(m.date_start) == "2026-05-11"
+
+
+def test_enrolled_wording_counts_as_taken() -> None:
+    from agent.intake import parse_standing
+
+    standing, codes = parse_standing(
+        "I am currently enrolled in these courses this term: CLAS 202, CO 327, HRM 200, STAT 337")
+    assert standing == "returning"
+    assert "CO 327" in codes and "STAT 337" in codes

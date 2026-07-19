@@ -118,9 +118,15 @@ _INDEX_HTML = """<!doctype html>
     <p class="hint">Paste Quest → My Class Schedule (List View) below — I'll turn it into an
     .ics calendar with the real rooms (e.g. QNC 2501) as the event location. TBA/online rows are skipped.</p>
     <textarea id="ics-text" placeholder="CO 327 - Deter OR Models&#10;...&#10;MW 1:00PM - 2:20PM&#10;QNC 2501&#10;..."></textarea>
-    <div class="row">
-      <button type="button" class="dl" id="ics-cancel">cancel</button>
-      <button type="button" id="ics-go">Download .ics</button>
+    <div class="row" style="justify-content:space-between; align-items:center;">
+      <label class="hint" style="margin:0; display:flex; gap:6px; align-items:center;">
+        <input type="checkbox" id="ics-sync" checked/>
+        also tell Schedugoose these are my current courses
+      </label>
+      <span>
+        <button type="button" class="dl" id="ics-cancel">cancel</button>
+        <button type="button" id="ics-go">Download .ics</button>
+      </span>
     </div>
   </div>
 </div>
@@ -368,6 +374,13 @@ document.getElementById('ics-go').addEventListener('click', async () => {
     URL.revokeObjectURL(a.href);
     icsModal.style.display = 'none';
     bubble("Your schedule calendar is downloading — import uw-schedule.ics into Google/Outlook/Apple Calendar. Rooms are set as each event's location.", 'bot');
+    // Optionally sync the parsed courses into the conversation, so the planner
+    // knows what you're currently enrolled in (counts like transcript in-progress).
+    const courses = res.headers.get('X-Schedule-Courses');
+    if (courses && document.getElementById('ics-sync').checked) {
+      input.value = 'I am currently enrolled in these courses this term: ' + courses.split(',').join(', ');
+      form.requestSubmit();
+    }
   } catch (err) { alert('Could not reach the server: ' + err.message); }
 });
 

@@ -240,6 +240,8 @@ def schedule_ics(req: ScheduleIcsRequest):
 
     from data.quest_schedule import parse_class_schedule, to_ics
 
+    if len(req.text) > 200_000:
+        return PlainTextResponse("That paste is too large to be a class schedule.", status_code=413)
     parsed = parse_class_schedule(req.text)
     events = sum(len(c.meetings) for c in parsed["courses"])
     METRICS.incr("schedule_ics_total")
@@ -250,10 +252,15 @@ def schedule_ics(req: ScheduleIcsRequest):
             "Start/End Date columns).",
             status_code=422,
         )
+    courses = [c.course_id for c in parsed["courses"]]
     return Response(
         content=to_ics(parsed),
         media_type="text/calendar",
-        headers={"Content-Disposition": 'attachment; filename="uw-schedule.ics"'},
+        headers={
+            "Content-Disposition": 'attachment; filename="uw-schedule.ics"',
+            # The frontend can offer to sync these into the chat session.
+            "X-Schedule-Courses": ",".join(courses),
+        },
     )
 
 
