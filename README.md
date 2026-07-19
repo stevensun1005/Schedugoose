@@ -12,7 +12,7 @@ It works for **any year of student**: a brand-new first-year gets the standard 1
 <img alt="LangGraph" src="https://img.shields.io/badge/LangGraph-orchestration-1C3C3C">
 <img alt="OR-Tools" src="https://img.shields.io/badge/OR--Tools-CP--SAT-EA4335">
 <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-async-009688?logo=fastapi&logoColor=white">
-<img alt="Tests" src="https://img.shields.io/badge/tests-216_passing-brightgreen">
+<img alt="Tests" src="https://img.shields.io/badge/tests-219_passing-brightgreen">
 <img alt="Eval" src="https://img.shields.io/badge/eval-100%25_on_3_axes-brightgreen">
 <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
 </p>
@@ -519,7 +519,7 @@ schedugoose/
 │   └── run_eval.py
 ├── scripts/
 │   └── e2e_user_flow.py        # step-by-step replay of a real chat session
-└── tests/                      # 216 deterministic tests (scheduler + agent + API)
+└── tests/                      # 219 deterministic tests (scheduler + agent + API)
 ```
 
 `scheduler/` is deliberately decoupled from the LLM so it can be unit-tested on
@@ -561,7 +561,24 @@ The harness runs fully offline (rule-based layers) so it is deterministic in CI;
 - **LLM + integer programming, not LLM-as-everything.** An LLM semantic layer maps natural-language career goals into structured constraints; an OR-Tools CP-SAT scheduler produces conflict-free, program-compliant schedules optimizing career-relevance and workload objectives.
 - **Grounded, not hallucinated.** Course data comes from the official UW Open Data API, program requirements verbatim from the UW academic-calendar (Kuali) API, career→course recommendations RAG-grounded in real requirements — the LLM never enumerates courses from its own knowledge (see [Grounding discipline](#grounding-discipline-why-it-doesnt-hallucinate)).
 - **Conversational and iterative.** LangGraph orchestrates multi-turn planning, infeasibility diagnosis, and millisecond re-optimization in response to plain-language edits ("make it lighter / no early mornings"). Any year of student: "I'm a 4th-year going into 4A" + a transcript upload plans only what's left.
-- **Verified.** 216 deterministic tests and a 3-axis eval harness (plan correctness, intent mapping, explanation faithfulness) at 100%, run as a hard CI gate on every push.
+- **Verified.** 219 deterministic tests and a 3-axis eval harness (plan correctness, intent mapping, explanation faithfulness) at 100%, run as a hard CI gate on every push.
+
+---
+
+## Future improvements
+
+Honest backlog — what's known-imperfect and what it would take:
+
+| Area | Idea | Why it isn't done yet |
+|------|------|-----------------------|
+| **Embeddings** | Set `OPENAI_API_KEY` to upgrade semantic course search from the deterministic local-hash fallback to real embeddings | Config, not code — flip the env var and `/health` shows the backend switch |
+| **Planned-term .ics** | Export the *planned* term as a calendar, like the Quest-paste export | Needs real lecture-period dates; the UW /Terms API only exposes administrative boundaries (Sep 1–Dec 31), and inventing class days is off the table. A curated per-term "classes begin/end" table (from the registrar's important-dates page) would unlock it |
+| **Deeper section data** | Real times for later terms + tutorial/lab section choice surfaced in the UI | Bounded today (first published terms, 20 courses/term) to respect UW API rate limits |
+| **Requirements compiler** | More Kuali grammar: cross-listing rules, "at most N from…" caps, per-list unit floors | Each pattern is a small parser addition; current coverage (choice groups, level rules, unit floors) handles the BMath plans tested |
+| **Multi-degree** | Double majors / joint plans compiled from two live requirement sets with shared-course accounting | The group machinery supports it; needs double-counting rules per faculty |
+| **Exams** | Quest "Exam Information" paste → exam-slot .ics | Same parser pattern as the class schedule; needs a sample paste to transcribe faithfully |
+| **Feedback loop** | Fine-tune on the 👍/👎-labelled SFT export (`scripts/export_sft.py`) | Needs volume — the logging and reward filtering are already in place |
+| **Rooms in plans** | Show room numbers in the weekly timetable for live sections | The /ClassSchedules payload carries location fields; parse + display |
 
 ---
 

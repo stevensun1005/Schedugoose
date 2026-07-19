@@ -183,11 +183,13 @@ def gather_constraints(state: PlannerState) -> dict[str, Any]:
     # would silently drop it while replies treat config codes as trustworthy.
     _filter_ineligible_config_courses(config, intake, state)
 
-    # Standing / transcript — captured during onboarding (before a plan exists).
-    # A brand-new student is the default; we only record what they actually tell us.
+    # Standing / transcript. Onboarding captures everything; once a plan exists
+    # an explicit done-context message ("I am currently enrolled in CO 327, …")
+    # STILL registers — e.g. the 📅 schedule-sync — and triggers a re-plan.
     profile_update: dict[str, Any] | None = None
+    completed_added_after_plan = False
+    standing, completed_codes = parse_standing(text)
     if not state.get("plan"):
-        standing, completed_codes = parse_standing(text)
         if standing:
             intake["standing"] = standing
         entering = parse_entering_term(text)
@@ -197,16 +199,22 @@ def gather_constraints(state: PlannerState) -> dict[str, Any]:
                 intake["standing"] = "returning"
         # A pasted transcript: several course codes at once, even without a
         # keyword like "completed". Treat as the returning-student transcript.
+        # (Kept onboarding-only: with a plan, "add A, B and C to 2A" is a
+        # revision, not a transcript.)
         if not completed_codes:
             bulk = extract_course_codes(text)
             if len(bulk) >= 3:
                 completed_codes = bulk
-        if completed_codes:
-            intake["standing"] = "returning"
-            prev_completed = list((state.get("profile") or {}).get("completed") or [])
-            merged = list(dict.fromkeys(prev_completed + completed_codes))
-            intake["completed"] = merged
-            profile_update = {**(state.get("profile") or {}), "completed": merged}
+    if completed_codes:
+        intake["standing"] = "returning"
+        prev_completed = list((state.get("profile") or {}).get("completed") or [])
+        prev_all = set(prev_completed) | set(intake.get("completed") or [])
+        merged = list(dict.fromkeys(prev_completed + list(intake.get("completed") or []) + completed_codes))
+        intake["completed"] = merged
+        profile_update = {**(state.get("profile") or {}), "completed": merged}
+        if state.get("plan") and set(merged) - prev_all:
+            completed_added_after_plan = True  # re-plan around the new courses
+        if not state.get("plan"):
             # A pasted transcript is an onboarding answer, not a "what is CS 135?" lookup.
             answering_onboarding = True
 
@@ -257,9 +265,12 @@ def gather_constraints(state: PlannerState) -> dict[str, Any]:
     career_goal = intake.get("career_goal") or state.get("career_goal", "") or ""
     turn_revision = revision_delta(prev, config)
     config_changed = _plan_config_changed(prev, config, text)
-    profile_changed = bool(degree_changed) or bool(component_added) or any(
-        base_intake.get(k) and base_intake.get(k) != intake.get(k)
-        for k in ("program", "residency", "sequence", "start_term")
+    profile_changed = (
+        bool(degree_changed) or bool(component_added) or completed_added_after_plan
+        or any(
+            base_intake.get(k) and base_intake.get(k) != intake.get(k)
+            for k in ("program", "residency", "sequence", "start_term")
+        )
     )
 
     out_state: dict[str, Any] = {

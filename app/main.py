@@ -150,9 +150,9 @@ function esc(s) {
 }
 function md(s) {
   let h = esc(s);
-  h = h.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+  h = h.replace(/\\*\\*([^*]+)\\*\\*/g, '<b>$1</b>');
   h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
-  h = h.replace(/(https?:\/\/[^\s<)]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  h = h.replace(/(https?:\\/\\/[^\\s<)]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
   return h;
 }
 function setBotText(el, text) { el.innerHTML = md(text); }
@@ -255,7 +255,7 @@ function renderDownload(bar, plan, explanation) {
       if (t.why) lines.push('    why: ' + t.why);
     }
     lines.push('', explanation || '');
-    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const blob = new Blob([lines.join('\\n')], { type: 'text/plain' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'schedugoose-plan.txt';
