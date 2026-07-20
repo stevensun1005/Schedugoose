@@ -121,19 +121,3 @@ def conversational_reply(state: PlannerState) -> tuple[str, bool]:
     if text:
         return text.strip(), True
     return _fallback_reply(state), False
-
-
-def wants_conversation(state: PlannerState) -> bool:
-    """True when we should chat naturally instead of dumping a form question."""
-
-    if not state.get("needs_clarification"):
-        return False
-    u = understanding_from_state(state)
-    if u and u.intent in ("general", "onboarding"):
-        return True
-    msg = last_user_message(state).lower().strip()
-    if len(msg) <= 30 and any(
-        g in msg for g in ("hi", "hello", "hey", "why", "你好", "嗨", "吗", "？")
-    ):
-        return True
-    return bool(u and u.intent == "general")

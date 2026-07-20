@@ -25,14 +25,6 @@ _CACHE_TTL_S = 60 * 60
 _last_data_source: str = "mock"
 MOCK_BY_ID: dict[str, RawRow] = {r["course_id"]: r for r in MOCK_ROWS}
 
-# Short blurbs when live API description is unavailable (mock-only runs).
-_MOCK_DESCRIPTIONS: dict[str, str] = {
-    "SOC 101": (
-        "An introduction to sociological concepts and interpretation — communities, "
-        "institutions, social processes, and change, with emphasis on Canadian society."
-    ),
-}
-
 _COURSE_ID_RE = re.compile(r"^([A-Za-z]{2,5})\s+(\d{3}[A-Za-z]?)$")
 
 
@@ -303,7 +295,7 @@ def lookup_course(
         return {
             "course_id": normalized,
             "title": mock["title"] if mock else normalized,
-            "description": _MOCK_DESCRIPTIONS.get(normalized),
+            "description": None,  # mock rows carry no prose; the calendar blurb fills in
             "units": float(mock.get("units", 0.5)) if mock else 0.5,
             "prereqs": list(mock.get("prereqs", [])) if mock else [],
             "categories": list(mock.get("categories", [])) if mock else [],

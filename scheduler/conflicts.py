@@ -29,13 +29,3 @@ def find_conflicts(courses: Iterable[Course]) -> list[tuple[str, str]]:
         if a.conflicts_with(b):
             conflicts.append((a.id, b.id))
     return conflicts
-
-
-def conflict_graph(courses: Iterable[Course]) -> dict[str, set[str]]:
-    """Adjacency view of the conflict relation, handy for diagnostics."""
-
-    graph: dict[str, set[str]] = {}
-    for a, b in find_conflicts(courses):
-        graph.setdefault(a, set()).add(b)
-        graph.setdefault(b, set()).add(a)
-    return graph

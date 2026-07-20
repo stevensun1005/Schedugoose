@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agent.intake import apply_elective_inference, is_complete, update_intake
+from agent.intake import apply_elective_inference, fill_intake_offline, is_complete
 from agent.nodes.gather import gather_constraints
 from data.degree_plans import parse_degree_plan
 from data.electives import infer_elective_picks_fallback
@@ -21,7 +21,7 @@ def test_business_spec_typo_infers_electives() -> None:
     text = "i want to have business specilization"
     config = {"min_easy_courses": 1}
 
-    intake = update_intake(intake, text)
+    intake = fill_intake_offline(intake, text)
     intake = apply_elective_inference(intake, text, config)
 
     assert intake.get("degree_plan")

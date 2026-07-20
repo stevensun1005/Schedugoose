@@ -9,7 +9,6 @@ from agent.semantic import extract_course_codes
 from data.degree_plans import (
     parse_degree_plan,
     parse_residency,
-    plan_from_intake,
     plan_to_dict,
 )
 from data.electives import (
@@ -176,9 +175,6 @@ def fill_intake_offline(intake: Intake, text: str, *, wants_easy: bool = False) 
     return out
 
 
-# Backward-compatible alias
-update_intake = fill_intake_offline
-
 
 def apply_elective_inference(
     intake: Intake,
@@ -295,7 +291,3 @@ def next_question(intake: Intake, config: dict[str, Any] | None = None) -> str:
             "(e.g. MUSIC 116, ENGL 119), or say 'skip' and I'll pick easy ones for you."
         )
     return ""
-
-
-def degree_plan_display(intake: Intake) -> str:
-    return plan_from_intake(intake).display()

@@ -19,9 +19,8 @@ PROGRAMS: dict[str, dict[str, int]] = {
 
 DEFAULT_PROGRAM = "CS-AI-Specialization"
 
-# UW Honours CS: 40 half-courses = 20.0 academic credits to graduate.
+# UW Honours CS: 20.0 academic credits (40 half-courses) to graduate.
 MIN_DEGREE_UNITS = 20.0
-MIN_DEGREE_COURSES = 40
 
 
 def get_program_reqs(program: str | None = None) -> dict[str, int]:

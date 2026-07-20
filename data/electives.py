@@ -50,14 +50,11 @@ def _dedupe(codes: list[str]) -> list[str]:
     return list(dict.fromkeys(codes))
 
 
-def easy_elective_options(completed: set[str] | None = None) -> list[dict[str, str]]:
-    """Return eligible easy electives the user can choose from."""
+def easy_elective_options() -> list[dict[str, str]]:
+    """Return easy electives to choose from (callers filter by eligibility)."""
 
-    completed = completed or set()
     out: list[dict[str, str]] = []
     for c in fetch_courses():
-        if c.course_id in completed:
-            continue
         if "Elective" not in c.categories:
             continue
         if c.easiness < EASY_THRESHOLD:
